@@ -104,7 +104,7 @@
 
         <!-- 3. 호스트 송출 화면 -->
         <section id="view-host" class="box hidden" style="max-width: 800px;">
-            <div style="display: flex; justify-space-between; align-items: center; margin-bottom: 12px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                 <span style="color: #ef4444; font-weight: bold;">● 실시간 송출 중</span>
                 <span style="font-size: 14px;">방 번호: <b style="color: #60a5fa;">1001</b></span>
             </div>
@@ -168,7 +168,7 @@
             showView('view-viewer-input');
         }
 
-        // --- 1. 호스트 PC (방만들기) ---
+        // 1. 호스트 PC (방만들기)
         async function startHosting() {
             if (isMobile) return;
 
@@ -209,7 +209,7 @@
             }
         }
 
-        // --- 2. 시청자 ---
+        // 2. 시청자
         function startViewing() {
             const code = document.getElementById('room-code-input').value.trim() || "1001";
             const targetRoomId = "GUSIK_ROOM_" + code;
@@ -269,6 +269,30 @@
             canvas.width = 16;
             canvas.height = 16;
             const ctx = canvas.getContext('2d');
+            ctx.fillRect(0, 0, 16, 16);
+            const stream = canvas.captureStream(1);
+
+            const ctxAudio = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = ctxAudio.createOscillator();
+            const dst = ctxAudio.createMediaStreamDestination();
+            osc.connect(dst);
+            osc.start();
+            const audioTrack = dst.stream.getAudioTracks()[0];
+            audioTrack.enabled = false;
+            stream.addTrack(audioTrack);
+
+            return stream;
+        }
+
+        function playRemoteVideo() {
+            const video = document.getElementById('remote-video');
+            video.play();
+            document.getElementById('video-overlay').classList.add('hidden');
+        }
+    </script>
+</body>
+</html>
+ ctx = canvas.getContext('2d');
             ctx.fillRect(0, 0, 16, 16);
             const stream = canvas.captureStream(1);
 
