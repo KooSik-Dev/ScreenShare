@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>구식의 화면 공유 시스템</title>
+    <!-- PeerJS WebRTC Library -->
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <!-- Tailwind CSS for functional utility classes -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        * {
+            border-radius: 0px !important;
+        }
+
+        body {
+            background-color: #0f172a;
+            color: #f8fafc;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            min-height: 100vh;
+        }
+
+        .view-section {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            min-height: 100vh;
+        }
+
+        .hidden-view {
+            display: none !important;
+        }
+
+        /* Top-Left Aligned Grid Layout */
+        .pc-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 16px;
+            width: 100%;
+            justify-content: start;
+            align-content: start;
+        }
+
+        .pc-card {
+            background-color: #1e293b;
+            border: 1px solid #334155;
+            padding: 12px;
+            cursor: pointer;
+            transition: all 0.15s ease-in-out;
+        }
+
+        .pc-card:hover {
+            border-color: #3b82f6;
+            background-color: #334155;
+        }
+
+        .pc-thumb-box {
+            width: 100%;
+            height: 140px;
+            background-color: #000000;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid #334155;
+            margin-top: 8px;
+        }
+
+        /* Video element wrapper */
+        .video-box {
+            position: relative;
+            width: 100%;
+            max-width: 1100px;
+            background: #000;
+            border: 1px solid #334155;
+            overflow: hidden;
+        }
+
+        video {
+            width: 100%;
+            max-height: 80vh;
+            background: #000;
+            display: block;
+        }
+
+        .unmute-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 20;
+        }
+    </style>
+</head>
+<body class="p-0 m-0">
+
+    <div id="mainScreen" class="view-section items-center justify-center p-6 text-center">
+        <div class="max-w-md w-full space-y-8 border border-slate-800 bg-slate-900/60 p-8">
+            <div>
+                <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-white mb-2">
+                    구식의 화면 공유 시스템
+                </h1>
+                <p class="text-slate-400 text-sm sm:text-base">
+                    AI활용하여 만든 화면공유 시스템
+                </p>
+            </div>
+
+            <div class="flex flex-col sm:flex-row gap-4 justify-center pt-4">
+                <button onclick="startHostMode()" class="w-full sm:w-auto px-8 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold transition duration-150 ease-in-out border border-blue-500">
+                    방만들기
+                </button>
+                <button onclick="startViewerMode()" class="w-full sm:w-auto px-8 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold transition duration-150 ease-in-out border border-emerald-500">
+                    시청하기
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="hostScreen" class="view-section items-center justify-center p-4 sm:p-8 hidden-view">
+        <div class="w-full max-w-5xl flex flex-col items-center">
+            <div class="w-full flex justify-start mb-4">
+                <button onclick="exitToHome()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium text-sm border border-slate-700">
+                    ← 메인으로
+                </button>
+            </div>
+            <div class="video-box">
+                <video id="hostVideo" autoplay playsinline muted></video>
+            </div>
+        </div>
+    </div>
+
+    <div id="pcListScreen" class="view-section p-6 hidden-view">
+        <div class="w-full max-w-7xl mx-auto flex flex-col items-start">
+            <div class="flex items-center justify-between w-full mb-6 pb-4 border-b border-slate-800">
+                <button onclick="exitToHome()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium text-sm border border-slate-700">
+                    ← 메인으로
+                </button>
+                <button onclick="refreshPCGrid()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm border border-blue-500">
+                    🔄 새로고침
+                </button>
+            </div>
+
+            <div id="pcGrid" class="pc-grid">
+                <div class="text-slate-400 text-sm py-12">송출 중인 PC를 검색하고 있습니다...</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="viewerVideoScreen" class="view-section items-center justify-center p-4 sm:p-8 hidden-view">
+        <div class="w-full max-w-5xl flex flex-col items-center">
+            <div class="w-full flex justify-start mb-4">
+                <button onclick="backToPCGrid()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium text-sm border border-slate-700">
+                    ← 목록으로 돌아가기
+                </button>
+            </div>
+            <div class="video-box">
+                <video id="remoteVideo" autoplay playsinline controls></video>
+                <div id="unmuteOverlay" class="unmute-overlay hidden-view" onclick="startVideoPlay()">
+                    <div class="text-4xl text-white mb-2">▶</div>
+                    <div class="text-white font-medium text-base">화면을 클릭하여 재생하세요</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="captureCanvas" class="hidden"></canvas>
+
+    <script>
+        const TOTAL_SLOTS = 16;
+        const SLOT_PREFIX = 'gs-screenshare-pc-slot-';
+
+        let peer = null;
+        let localStream = null;
+        let activeThumbnails = {};
+        let activeCalls = [];
+        let autoScanTimer = null;
+
+        function showView(viewId) {
+            document.getElementById('mainScreen').classList.add('hidden-view');
+            document.getElementById('hostScreen').classList.add('hidden-view');
+            document.getElementById('pcListScreen').classList.add('hidden-view');
+            document.getElementById('viewerVideoScreen').classList.add('hidden-view');
+
+            document.getElementById(viewId).classList.remove('hidden-view');
+        }
+
+        function exitToHome() {
+            location.reload();
+        }
+
+        function backToPCGrid() {
+            const remoteVideo = document.getElementById('remoteVideo');
+            if (remoteVideo.srcObject) {
+                remoteVideo.srcObject.getTracks().forEach(t => t.stop());
+                remoteVideo.srcObject = null;
+            }
+            showView('pcListScreen');
+            refreshPCGrid();
+        }
+
+        async function startHostMode() {
+            try {
+                localStream = await navigator.mediaDevices.getDisplayMedia({
+                    video: { frameRate: { max: 30 } },
+                    audio: true
+                });
+
+                const hostVideo = document.getElementById('hostVideo');
+                hostVideo.srcObject = localStream;
+                showView('hostScreen');
+
+                findAvailableSlotAndRegister(1);
+
+                localStream.getVideoTracks()[0].onended = () => {
+                    location.reload();
+                };
+
+            } catch (err) {
+                console.error("Screen capture error:", err);
+                alert("화면 공유가 취소되었거나 지원되지 않는 환경입니다.");
+            }
+        }
+
+        function findAvailableSlotAndRegister(slotIndex) {
+            if (slotIndex > TOTAL_SLOTS) {
+                alert("현재 방송 가능한 슬롯이 가득 찼습니다.");
+                location.reload();
+                return;
+            }
+
+            const slotId = SLOT_PREFIX + slotIndex;
+            const tempPeer = new Peer(slotId);
+
+            tempPeer.on('open', () => {
+                peer = tempPeer;
+                setupHostEvents(slotIndex);
+            });
+
+            tempPeer.on('error', (err) => {
+                if (err.type === 'unavailable-id') {
+                    tempPeer.destroy();
+                    findAvailableSlotAndRegister(slotIndex + 1);
+                } else {
+                    console.error("Peer host error:", err);
+                }
+            });
+        }
+
+        function setupHostEvents(slotNum) {
+            peer.on('call', (call) => {
+                call.answer(localStream);
+                activeCalls.push(call);
+
+                call.on('close', () => {
+                    activeCalls = activeCalls.filter(c => c !== call);
+                });
+            });
+
+            peer.on('connection', (conn) => {
+                conn.on('data', (data) => {
+                    if (data === 'request-thumb') {
+                        const thumb = captureCanvasFrame();
+                        conn.send({ type: 'thumb', slot: slotNum, data: thumb });
+                    }
+                });
+            });
+
+            setTimeout(captureCanvasFrame, 1000);
+        }
+
+        function captureCanvasFrame() {
+            const video = document.getElementById('hostVideo');
+            const canvas = document.getElementById('captureCanvas');
+            if (!video.videoWidth) return null;
+
+            canvas.width = 320;
+            canvas.height = 180;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            return canvas.toDataURL('image/jpeg', 0.5);
+        }
+
+        function startViewerMode() {
+            showView('pcListScreen');
+            peer = new Peer();
+
+            peer.on('open', () => {
+                refreshPCGrid();
+                autoScanTimer = setInterval(refreshPCGrid, 10000);
+            });
+
+            peer.on('error', (err) => {
+                console.warn("PeerJS Viewer notice:", err.type);
+            });
+        }
+
+        function refreshPCGrid() {
+            if (!peer || peer.destroyed) return;
+
+            for (let i = 1; i <= TOTAL_SLOTS; i++) {
+                const targetId = SLOT_PREFIX + i;
+                const conn = peer.connect(targetId, { relaxed: true });
+
+                let received = false;
+                conn.on('open', () => {
+                    received = true;
+                    conn.send('request-thumb');
+                });
+
+                conn.on('data', (msg) => {
+                    if (msg && msg.type === 'thumb') {
+                        activeThumbnails[i] = msg.data;
+                        renderGridCards();
+                        conn.close();
+                    }
+                });
+
+                setTimeout(() => {
+                    if (!received) {
+                        delete activeThumbnails[i];
+                        renderGridCards();
+                    }
+                }, 2000);
+            }
+        }
+
+        function renderGridCards() {
+            const grid = document.getElementById('pcGrid');
+            const slots = Object.keys(activeThumbnails).map(Number).sort((a, b) => a - b);
+
+            if (slots.length === 0) {
+                grid.innerHTML = '<div class="text-slate-400 text-sm py-12">현재 송출 중인 PC가 없습니다.</div>';
+                return;
+            }
+
+            grid.innerHTML = '';
+            slots.forEach(slot => {
+                const thumbData = activeThumbnails[slot];
+                const card = document.createElement('div');
+                card.className = 'pc-card';
+                card.onclick = () => connectToStream(slot);
+
+                const thumbHtml = thumbData
+                    ? `<img src="${thumbData}" class="w-full h-full object-cover" alt="PC ${slot}">`
+                    : `<span class="text-xs text-slate-500">화면 준비 중...</span>`;
+
+                card.innerHTML = `
+                    <div class="flex items-center justify-between">
+                        <span class="font-bold text-blue-400 text-sm">PC ${slot}</span>
+                        <span class="inline-flex items-center text-xs text-emerald-400 font-semibold">
+                            <span class="w-2 h-2 bg-emerald-400 mr-1.5 animate-pulse"></span> ON AIR
+                        </span>
+                    </div>
+                    <div class="pc-thumb-box">
+                        ${thumbHtml}
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        function connectToStream(slotNum) {
+            showView('viewerVideoScreen');
+            const targetPeerId = SLOT_PREFIX + slotNum;
+
+            const canvas = document.createElement('canvas');
+            const dummyStream = canvas.captureStream(1);
+
+            const call = peer.call(targetPeerId, dummyStream);
+
+            call.on('stream', (remoteStream) => {
+                const remoteVideo = document.getElementById('remoteVideo');
+                remoteVideo.srcObject = remoteStream;
+
+                const promise = remoteVideo.play();
+                if (promise !== undefined) {
+                    promise.catch(() => {
+                        document.getElementById('unmuteOverlay').classList.remove('hidden-view');
+                    });
+                }
+            });
+
+            call.on('close', () => {
+                alert("방송이 종료되었습니다.");
+                backToPCGrid();
+            });
+
+            call.on('error', (err) => {
+                console.error("Stream call failure:", err);
+                alert("스트림 연결에 실패했습니다.");
+                backToPCGrid();
+            });
+        }
+
+        function startVideoPlay() {
+            const remoteVideo = document.getElementById('remoteVideo');
+            remoteVideo.play();
+            document.getElementById('unmuteOverlay').classList.add('hidden-view');
+        }
+    </script>
+</body>
+</html>
