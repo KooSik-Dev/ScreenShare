@@ -4,126 +4,156 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>구식의 화면 공유 시스템</title>
-    <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
     <!-- PeerJS CDN -->
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
+        /* 경고 메시지를 유발하는 Tailwind 대신 순수 CSS 적용 */
         *, *::before, *::after {
-            border-radius: 0 !important;
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            border-radius: 0 !important; /* 100% 직각 유지 */
         }
         body {
             background-color: #111827;
             color: #F3F4F6;
             font-family: monospace, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            user-select: none;
+        }
+        header, footer {
+            background-color: #1f2937;
+            border-color: #374151;
+            padding: 12px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        header { border-bottom: 2px solid #374151; }
+        footer { border-top: 2px solid #374151; font-size: 12px; color: #9ca3af; }
+        main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+        }
+        .box {
+            width: 100%;
+            max-width: 600px;
+            background-color: #1f2937;
+            border: 2px solid #374151;
+            padding: 24px;
+            text-align: center;
+        }
+        .btn {
+            width: 100%;
+            padding: 16px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            border: 2px solid;
+            color: white;
+            margin-top: 10px;
+        }
+        .btn-blue { background-color: #1d4ed8; border-color: #3b82f6; }
+        .btn-blue:hover { background-color: #2563eb; }
+        .btn-gray { background-color: #374151; border-color: #4b5563; }
+        .btn-gray:hover { background-color: #4b5563; }
+        .hidden { display: none !important; }
+        video { width: 100%; height: 100%; object-fit: contain; background: black; }
+        .video-container {
+            width: 100%;
+            aspect-ratio: 16/9;
+            background: black;
+            border: 2px solid #374151;
+            margin-top: 12px;
+            position: relative;
+        }
+        input {
+            width: 100%;
+            padding: 12px;
+            background: #111827;
+            border: 2px solid #374151;
+            color: white;
+            font-family: monospace;
+            font-size: 16px;
+            margin-bottom: 12px;
+            text-align: center;
         }
     </style>
 </head>
-<body class="min-h-screen flex flex-col justify-between select-none">
+<body>
 
-    <!-- 상단 헤더 -->
-    <header class="bg-gray-900 border-b-2 border-gray-700 px-4 py-3 flex items-center justify-between">
-        <div class="flex items-center space-x-3">
-            <div class="w-4 h-4 bg-blue-600"></div>
-            <h1 class="font-bold text-lg tracking-wider text-gray-100">구식의 화면 공유 시스템</h1>
+    <header>
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <div style="width: 16px; height: 16px; background: #2563eb;"></div>
+            <h1 style="font-size: 16px;">구식의 화면 공유 시스템</h1>
         </div>
-        <div class="text-xs text-gray-400 bg-gray-800 border border-gray-700 px-3 py-1">
-            STATUS: <span id="sys-status" class="text-green-400 font-bold">READY</span>
-        </div>
+        <div style="font-size: 12px; color: #9ca3af;">STATUS: <span id="sys-status" style="color: #4ade80;">READY</span></div>
     </header>
 
-    <!-- 메인 영역 -->
-    <main class="flex-1 flex flex-col items-center justify-center p-4">
-
+    <main>
         <!-- 1. 메인 선택 화면 -->
-        <section id="view-main" class="w-full max-w-xl bg-gray-900 border-2 border-gray-700 p-8 text-center">
-            <h2 class="text-2xl font-bold mb-2 text-white border-b-2 border-gray-800 pb-4">구식의 화면 공유 시스템</h2>
-            <p class="text-sm text-gray-400 mb-8 mt-2">AI활용하여 만든 화면공유 시스템</p>
+        <section id="view-main" class="box">
+            <h2 style="font-size: 20px; border-bottom: 2px solid #374151; padding-bottom: 12px; margin-bottom: 12px;">구식의 화면 공유 시스템</h2>
+            <p style="font-size: 12px; color: #9ca3af; margin-bottom: 24px;">AI활용하여 만든 화면공유 시스템</p>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <button id="btn-create-room" onclick="startHosting()" class="bg-blue-700 hover:bg-blue-600 text-white font-bold py-5 px-4 border-2 border-blue-500 text-lg">
-                    방만들기
-                </button>
-                <button id="btn-view-rooms" onclick="startViewing()" class="bg-gray-800 hover:bg-gray-700 text-white font-bold py-5 px-4 border-2 border-gray-600 text-lg">
-                    시청하기
-                </button>
-            </div>
+            <button id="btn-create" onclick="startHosting()" class="btn btn-blue">방만들기 (PC 전용)</button>
+            <button onclick="showViewerInput()" class="btn btn-gray">시청하기</button>
 
-            <div id="mobile-notice" class="hidden mt-6 p-3 bg-yellow-900/40 border border-yellow-600 text-yellow-200 text-xs text-left">
+            <div id="mobile-notice" class="hidden" style="margin-top: 16px; padding: 12px; background: #451a03; border: 1px solid #d97706; color: #fde68a; font-size: 12px; text-align: left;">
                 * 모바일 기기에서는 [시청하기] 전용 모드로 동작합니다.
             </div>
         </section>
 
-        <!-- 2. 호스트 PC 송출 화면 -->
-        <section id="view-host" class="hidden w-full max-w-4xl bg-gray-900 border-2 border-gray-700 p-6">
-            <div class="flex items-center justify-between border-b-2 border-gray-800 pb-3 mb-4">
-                <div class="flex items-center space-x-2">
-                    <span class="w-3 h-3 bg-red-500 animate-pulse"></span>
-                    <span class="font-bold text-red-400">실시간 화면 송출 중</span>
-                </div>
-                <div class="text-xs text-gray-400">
-                    채널: <span class="text-green-400 font-bold">MAIN_PC</span>
-                </div>
-            </div>
+        <!-- 2. 모바일/시청자 방 번호 입력 -->
+        <section id="view-viewer-input" class="box hidden">
+            <h3 style="margin-bottom: 16px;">접속할 PC 방 번호 입력</h3>
+            <input type="text" id="room-code-input" value="1001" placeholder="방 번호 입력 (기본: 1001)">
+            <button onclick="startViewing()" class="btn btn-blue">접속하기</button>
+            <button onclick="showView('view-main')" class="btn btn-gray">뒤로가기</button>
+        </section>
 
-            <div class="bg-black border-2 border-gray-800 w-full aspect-video flex items-center justify-center overflow-hidden">
-                <video id="host-preview" autoplay playsinline muted class="w-full h-full object-contain"></video>
+        <!-- 3. 호스트 송출 화면 -->
+        <section id="view-host" class="box hidden" style="max-width: 800px;">
+            <div style="display: flex; justify-space-between; align-items: center; margin-bottom: 12px;">
+                <span style="color: #ef4444; font-weight: bold;">● 실시간 화면 송출 중</span>
+                <span style="font-size: 14px;">방 번호: <b id="host-room-id" style="color: #60a5fa;">1001</b></span>
+            </div>
+            <div class="video-container">
+                <video id="host-preview" autoplay playsinline muted></video>
             </div>
         </section>
 
-        <!-- 3. 시청 모드 (학생컴 관제실 그리드) -->
-        <section id="view-viewer-list" class="hidden w-full max-w-6xl">
-            <div class="bg-gray-900 border-2 border-gray-700 p-4 mb-4 flex items-center justify-between">
-                <h3 class="font-bold text-gray-200 flex items-center gap-2">
-                    <span class="w-3 h-3 bg-green-500"></span>
-                    송출 중인 PC 목록
-                </h3>
-                <button onclick="checkPcOnline()" class="bg-gray-800 hover:bg-gray-700 border border-gray-600 text-xs px-3 py-1 font-bold">
-                    목록 새로고침
-                </button>
+        <!-- 4. 시청자 라이브 수신 화면 -->
+        <section id="view-stream" class="box hidden" style="max-width: 800px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <span style="color: #60a5fa; font-weight: bold;">PC 화면 시청 중</span>
+                <button onclick="location.reload()" style="padding: 6px 12px; background: #374151; color: white; border: 1px solid #4b5563; cursor: pointer;">나가기</button>
             </div>
-
-            <div id="pc-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                <!-- JS 생성 카드 -->
-            </div>
-
-            <div id="no-pc-msg" class="hidden bg-gray-900 border-2 border-gray-800 p-12 text-center text-gray-500">
-                현재 송출 중인 PC가 없습니다. (PC에서 [방만들기]를 먼저 누르세요)
-            </div>
-        </section>
-
-        <!-- 4. 실시간 방송 시청 -->
-        <section id="view-stream" class="hidden w-full max-w-5xl bg-gray-900 border-2 border-gray-700 p-4">
-            <div class="flex items-center justify-between border-b-2 border-gray-800 pb-3 mb-4">
-                <span class="font-bold text-blue-400">PC_1 실시간 화면</span>
-                <button onclick="backToGrid()" class="bg-gray-800 hover:bg-gray-700 border border-gray-600 text-xs px-4 py-2 font-bold text-gray-200">
-                    목록으로 돌아가기
-                </button>
-            </div>
-
-            <div class="relative bg-black border-2 border-gray-800 w-full aspect-video flex items-center justify-center overflow-hidden">
-                <video id="remote-video" autoplay playsinline class="w-full h-full object-contain"></video>
-                <div id="video-overlay" class="hidden absolute inset-0 bg-black/80 flex items-center justify-center">
-                    <button onclick="playRemoteVideo()" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-6 border-2 border-blue-400">
-                        터치하여 화면 보기
-                    </button>
+            <div class="video-container">
+                <video id="remote-video" autoplay playsinline></video>
+                <div id="video-overlay" class="hidden" style="position: absolute; inset: 0; background: rgba(0,0,0,0.8); display: flex; items-center; justify-content: center;">
+                    <button onclick="playRemoteVideo()" class="btn btn-blue" style="width: auto; padding: 12px 24px;">터치하여 영상 재생</button>
                 </div>
             </div>
         </section>
-
     </main>
 
-    <footer class="bg-gray-900 border-t-2 border-gray-800 px-4 py-2 text-xs text-gray-500 flex justify-between items-center">
+    <footer>
         <span>WebRTC P2P System</span>
         <span id="footer-info">Ready</span>
     </footer>
 
     <script>
         const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-
-        // 고정 채널 ID 지정
-        const HOST_ROOM_ID = "GUSIK_SHARE_MAIN_HOST";
-
+        
+        // PeerJS 연결 설정 (TURN 릴레이 서버 등록)
         const PEER_CONFIG = {
             config: {
                 iceServers: [
@@ -140,22 +170,27 @@
 
         window.addEventListener('DOMContentLoaded', () => {
             if (isMobile) {
-                const createBtn = document.getElementById('btn-create-room');
-                createBtn.disabled = true;
-                createBtn.classList.add('opacity-40', 'cursor-not-allowed');
-                createBtn.onclick = () => alert('화면 공유 송출은 데스크톱(PC) 환경에서만 가능합니다.');
+                const btn = document.getElementById('btn-create');
+                btn.disabled = true;
+                btn.style.opacity = '0.4';
+                btn.style.cursor = 'not-allowed';
+                btn.onclick = () => alert('화면 공유 송출은 데스크톱(PC) 환경에서만 가능합니다.');
                 document.getElementById('mobile-notice').classList.remove('hidden');
             }
         });
 
-        function showView(viewId) {
-            ['view-main', 'view-host', 'view-viewer-list', 'view-stream'].forEach(id => {
-                document.getElementById(id).classList.add('hidden');
+        function showView(id) {
+            ['view-main', 'view-viewer-input', 'view-host', 'view-stream'].forEach(v => {
+                document.getElementById(v).classList.add('hidden');
             });
-            document.getElementById(viewId).classList.remove('hidden');
+            document.getElementById(id).classList.remove('hidden');
         }
 
-        // --- 1. 방만들기 (PC) ---
+        function showViewerInput() {
+            showView('view-viewer-input');
+        }
+
+        // --- 호스트 (PC) ---
         async function startHosting() {
             if (isMobile) return;
 
@@ -168,21 +203,23 @@
                 showView('view-host');
                 document.getElementById('host-preview').srcObject = localStream;
 
-                // 고정 ID로 호스트 생성
-                peer = new Peer(HOST_ROOM_ID, PEER_CONFIG);
+                // 고정 방 번호: GUSIK_ROOM_1001
+                const hostRoomId = "GUSIK_ROOM_1001";
+                peer = new Peer(hostRoomId, PEER_CONFIG);
 
                 peer.on('open', () => {
                     document.getElementById('sys-status').innerText = 'HOSTING';
-                    document.getElementById('footer-info').innerText = '송출 중 [MAIN_PC]';
+                    document.getElementById('footer-info').innerText = '송출 중 [방 번호: 1001]';
                 });
 
+                // 시청자 접속 요청 처리
                 peer.on('call', (call) => {
                     call.answer(localStream);
                 });
 
                 peer.on('error', (err) => {
                     if (err.type === 'unavailable-id') {
-                        alert('이미 다른 PC에서 화면 공유를 송출 중입니다.');
+                        alert('이미 다른 PC에서 1001번 방을 이용 중입니다.');
                         location.reload();
                     }
                 });
@@ -197,90 +234,40 @@
             }
         }
 
-        // --- 2. 시청하기 (모바일/PC) ---
+        // --- 시청자 (모바일/PC) ---
         function startViewing() {
-            showView('view-viewer-list');
-            document.getElementById('sys-status').innerText = 'VIEWER_MODE';
+            const code = document.getElementById('room-code-input').value.trim() || "1001";
+            const targetRoomId = "GUSIK_ROOM_" + code;
+
+            showView('view-stream');
+            document.getElementById('sys-status').innerText = 'CONNECTING...';
 
             const viewerId = "VIEWER_" + Math.random().toString(36).substring(2, 9);
             peer = new Peer(viewerId, PEER_CONFIG);
 
             peer.on('open', () => {
-                checkPcOnline();
-            });
-        }
+                const call = peer.call(targetRoomId, null);
 
-        // 호스트 온라인 상태 확인 후 목록 카드 생성
-        function checkPcOnline() {
-            if (!peer) return;
+                call.on('stream', (remoteStream) => {
+                    document.getElementById('sys-status').innerText = 'CONNECTED';
+                    const video = document.getElementById('remote-video');
+                    video.srcObject = remoteStream;
 
-            // 데이터 연결로 호스트 생존 여부 테스트
-            const conn = peer.connect(HOST_ROOM_ID);
-            let isOnline = false;
-
-            const timer = setTimeout(() => {
-                if (!isOnline) {
-                    conn.close();
-                    document.getElementById('pc-grid').innerHTML = '';
-                    document.getElementById('no-pc-msg').classList.remove('hidden');
-                }
-            }, 3000);
-
-            conn.on('open', () => {
-                isOnline = true;
-                clearTimeout(timer);
-                conn.close();
-                renderPcCard();
-            });
-        }
-
-        function renderPcCard() {
-            document.getElementById('no-pc-msg').classList.add('hidden');
-            const grid = document.getElementById('pc-grid');
-            grid.innerHTML = `
-                <div onclick="connectToPc()" class="bg-gray-900 border-2 border-gray-700 p-2 cursor-pointer hover:border-blue-500">
-                    <div class="bg-black border border-gray-800 aspect-video flex items-center justify-center mb-2">
-                        <span class="text-xs text-blue-400 font-bold">| PC 1 |</span>
-                    </div>
-                    <div class="flex items-center justify-between text-xs border-t border-gray-800 pt-2">
-                        <span class="font-bold text-gray-300">PC_1 (메인)</span>
-                        <span class="text-green-400 font-bold">LIVE</span>
-                    </div>
-                </div>
-            `;
-        }
-
-        // --- 3. 라이브 시청 연결 ---
-        function connectToPc() {
-            showView('view-stream');
-            const call = peer.call(HOST_ROOM_ID, null);
-
-            call.on('stream', (remoteStream) => {
-                const remoteVideo = document.getElementById('remote-video');
-                remoteVideo.srcObject = remoteStream;
-                remoteVideo.play().catch(() => {
-                    document.getElementById('video-overlay').classList.remove('hidden');
+                    video.play().catch(() => {
+                        document.getElementById('video-overlay').classList.remove('hidden');
+                    });
                 });
-            });
 
-            call.on('error', () => {
-                alert('PC 화면을 불러올 수 없습니다.');
-                backToGrid();
+                call.on('error', () => {
+                    alert('해당 방 번호(' + code + ')의 PC를 찾을 수 없습니다. PC에서 먼저 [방만들기]를 눌렀는지 확인하세요.');
+                    location.reload();
+                });
             });
         }
 
         function playRemoteVideo() {
             document.getElementById('remote-video').play();
             document.getElementById('video-overlay').classList.add('hidden');
-        }
-
-        function backToGrid() {
-            showView('view-viewer-list');
-            const remoteVideo = document.getElementById('remote-video');
-            if (remoteVideo.srcObject) {
-                remoteVideo.srcObject.getTracks().forEach(t => t.stop());
-                remoteVideo.srcObject = null;
-            }
         }
     </script>
 </body>
