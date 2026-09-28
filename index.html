@@ -9,7 +9,6 @@
     <!-- PeerJS CDN -->
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
-        /* 모든 요소 100% 직각 설정 */
         *, *::before, *::after {
             border-radius: 0 !important;
         }
@@ -18,17 +17,11 @@
             color: #F3F4F6;
             font-family: monospace, sans-serif;
         }
-        .pc-card {
-            transition: border-color 0.15s ease-in-out;
-        }
-        .pc-card:hover {
-            border-color: #3B82F6;
-        }
     </style>
 </head>
 <body class="min-h-screen flex flex-col justify-between select-none">
 
-    <!-- 상단 프로그램 헤더바 -->
+    <!-- 상단 헤더 -->
     <header class="bg-gray-900 border-b-2 border-gray-700 px-4 py-3 flex items-center justify-between">
         <div class="flex items-center space-x-3">
             <div class="w-4 h-4 bg-blue-600"></div>
@@ -39,30 +32,29 @@
         </div>
     </header>
 
-    <!-- 메인 컨텐츠 영역 -->
+    <!-- 메인 영역 -->
     <main class="flex-1 flex flex-col items-center justify-center p-4">
 
         <!-- 1. 메인 선택 화면 -->
-        <section id="view-main" class="w-full max-w-xl bg-gray-900 border-2 border-gray-700 p-8 shadow-2xl text-center">
+        <section id="view-main" class="w-full max-w-xl bg-gray-900 border-2 border-gray-700 p-8 text-center">
             <h2 class="text-2xl font-bold mb-2 text-white border-b-2 border-gray-800 pb-4">구식의 화면 공유 시스템</h2>
             <p class="text-sm text-gray-400 mb-8 mt-2">AI활용하여 만든 화면공유 시스템</p>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="main-btn-group">
-                <button id="btn-create-room" onclick="startHosting()" class="bg-blue-700 hover:bg-blue-600 active:bg-blue-800 text-white font-bold py-5 px-4 border-2 border-blue-500 shadow text-lg transition-all">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <button id="btn-create-room" onclick="startHosting()" class="bg-blue-700 hover:bg-blue-600 text-white font-bold py-5 px-4 border-2 border-blue-500 text-lg">
                     방만들기
                 </button>
-                <button id="btn-view-rooms" onclick="startViewing()" class="bg-gray-800 hover:bg-gray-700 active:bg-gray-900 text-white font-bold py-5 px-4 border-2 border-gray-600 shadow text-lg transition-all">
+                <button id="btn-view-rooms" onclick="startViewing()" class="bg-gray-800 hover:bg-gray-700 text-white font-bold py-5 px-4 border-2 border-gray-600 text-lg">
                     시청하기
                 </button>
             </div>
 
-            <!-- 모바일 안내 (모바일 접속 시 방만들기 차단 메시지) -->
             <div id="mobile-notice" class="hidden mt-6 p-3 bg-yellow-900/40 border border-yellow-600 text-yellow-200 text-xs text-left">
-                * 모바일 기기에서는 [시청하기] 전용 모드로 동작합니다. (화면 공유 송출은 데스크톱 PC에서만 가능)
+                * 모바일 기기에서는 [시청하기] 전용 모드로 동작합니다.
             </div>
         </section>
 
-        <!-- 2. 화면 송출 중 화면 (호스트 PC 전용) -->
+        <!-- 2. 호스트 PC 송출 화면 -->
         <section id="view-host" class="hidden w-full max-w-4xl bg-gray-900 border-2 border-gray-700 p-6">
             <div class="flex items-center justify-between border-b-2 border-gray-800 pb-3 mb-4">
                 <div class="flex items-center space-x-2">
@@ -70,7 +62,7 @@
                     <span class="font-bold text-red-400">실시간 화면 송출 중</span>
                 </div>
                 <div class="text-xs text-gray-400">
-                    ID: <span id="host-peer-id" class="text-gray-200 font-mono">생성 중...</span>
+                    채널: <span class="text-green-400 font-bold">MAIN_PC</span>
                 </div>
             </div>
 
@@ -79,31 +71,31 @@
             </div>
         </section>
 
-        <!-- 3. 시청 모드: 학생컴 관리 관제실 그리드 -->
+        <!-- 3. 시청 모드 (학생컴 관제실 그리드) -->
         <section id="view-viewer-list" class="hidden w-full max-w-6xl">
             <div class="bg-gray-900 border-2 border-gray-700 p-4 mb-4 flex items-center justify-between">
                 <h3 class="font-bold text-gray-200 flex items-center gap-2">
                     <span class="w-3 h-3 bg-green-500"></span>
-                    송출 중인 PC 목록 (10초 자동 갱신)
+                    송출 중인 PC 목록
                 </h3>
-                <button onclick="fetchActivePeers()" class="bg-gray-800 hover:bg-gray-700 border border-gray-600 text-xs px-3 py-1 font-bold">
+                <button onclick="checkPcOnline()" class="bg-gray-800 hover:bg-gray-700 border border-gray-600 text-xs px-3 py-1 font-bold">
                     목록 새로고침
                 </button>
             </div>
 
             <div id="pc-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                <!-- PC 카드들이 JS로 여기에 다이내믹 생성됨 -->
+                <!-- JS 생성 카드 -->
             </div>
 
             <div id="no-pc-msg" class="hidden bg-gray-900 border-2 border-gray-800 p-12 text-center text-gray-500">
-                현재 송출 중인 PC가 없습니다.
+                현재 송출 중인 PC가 없습니다. (PC에서 [방만들기]를 먼저 누르세요)
             </div>
         </section>
 
-        <!-- 4. 단일 PC 실시간 시청 모달/화면 -->
+        <!-- 4. 실시간 방송 시청 -->
         <section id="view-stream" class="hidden w-full max-w-5xl bg-gray-900 border-2 border-gray-700 p-4">
             <div class="flex items-center justify-between border-b-2 border-gray-800 pb-3 mb-4">
-                <span class="font-bold text-blue-400" id="selected-pc-title">PC 화면 시청 중</span>
+                <span class="font-bold text-blue-400">PC_1 실시간 화면</span>
                 <button onclick="backToGrid()" class="bg-gray-800 hover:bg-gray-700 border border-gray-600 text-xs px-4 py-2 font-bold text-gray-200">
                     목록으로 돌아가기
                 </button>
@@ -113,7 +105,7 @@
                 <video id="remote-video" autoplay playsinline class="w-full h-full object-contain"></video>
                 <div id="video-overlay" class="hidden absolute inset-0 bg-black/80 flex items-center justify-center">
                     <button onclick="playRemoteVideo()" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-6 border-2 border-blue-400">
-                        클릭하여 화면 시청하기
+                        터치하여 화면 보기
                     </button>
                 </div>
             </div>
@@ -121,56 +113,41 @@
 
     </main>
 
-    <!-- 하단 상태 표시줄 -->
     <footer class="bg-gray-900 border-t-2 border-gray-800 px-4 py-2 text-xs text-gray-500 flex justify-between items-center">
         <span>WebRTC P2P System</span>
         <span id="footer-info">Ready</span>
     </footer>
 
-    <!-- 자바스크립트 구현 -->
     <script>
-        // 모바일 기기 여부 판별
         const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
-        // PeerJS 설정 (무료 TURN/STUN 릴레이 서버 등록)
+        // 고정 채널 ID 지정
+        const HOST_ROOM_ID = "GUSIK_SHARE_MAIN_HOST";
+
         const PEER_CONFIG = {
-            debug: 1,
             config: {
                 iceServers: [
                     { urls: 'stun:stun.l.google.com:19302' },
                     { urls: 'stun:stun1.l.google.com:19302' },
-                    {
-                        urls: 'turn:openrelay.metered.ca:80',
-                        username: 'openrelay',
-                        credential: 'openrelay'
-                    },
-                    {
-                        urls: 'turn:openrelay.metered.ca:443',
-                        username: 'openrelay',
-                        credential: 'openrelay'
-                    }
+                    { urls: 'turn:openrelay.metered.ca:80', username: 'openrelay', credential: 'openrelay' },
+                    { urls: 'turn:openrelay.metered.ca:443', username: 'openrelay', credential: 'openrelay' }
                 ]
             }
         };
 
-        const PREFIX = "GUSIK_SHARE_";
         let peer = null;
         let localStream = null;
-        let captureInterval = null;
-        let activePeersMap = new Map();
 
-        // 페이지 로드 시 모바일 제어 처리
         window.addEventListener('DOMContentLoaded', () => {
             if (isMobile) {
                 const createBtn = document.getElementById('btn-create-room');
                 createBtn.disabled = true;
-                createBtn.classList.add('opacity-40', 'cursor-not-allowed', 'hover:bg-blue-700');
+                createBtn.classList.add('opacity-40', 'cursor-not-allowed');
                 createBtn.onclick = () => alert('화면 공유 송출은 데스크톱(PC) 환경에서만 가능합니다.');
                 document.getElementById('mobile-notice').classList.remove('hidden');
             }
         });
 
-        // 뷰 전환 도우미
         function showView(viewId) {
             ['view-main', 'view-host', 'view-viewer-list', 'view-stream'].forEach(id => {
                 document.getElementById(id).classList.add('hidden');
@@ -178,187 +155,122 @@
             document.getElementById(viewId).classList.remove('hidden');
         }
 
-        // ==========================================
-        // 1. 방만들기 (호스트 PC 전용)
-        // ==========================================
+        // --- 1. 방만들기 (PC) ---
         async function startHosting() {
-            if (isMobile) {
-                alert('화면 공유 송출은 데스크톱(PC) 환경에서만 작동합니다.');
-                return;
-            }
+            if (isMobile) return;
 
             try {
-                // 화면 공유 스트림 요청
                 localStream = await navigator.mediaDevices.getDisplayMedia({
                     video: { frameRate: { max: 30 } },
                     audio: true
                 });
 
                 showView('view-host');
-                const hostVideo = document.getElementById('host-preview');
-                hostVideo.srcObject = localStream;
+                document.getElementById('host-preview').srcObject = localStream;
 
-                // 호스트 고유 Peer ID 생성
-                const randomId = PREFIX + Math.random().toString(36).substring(2, 9);
-                peer = new Peer(randomId, PEER_CONFIG);
+                // 고정 ID로 호스트 생성
+                peer = new Peer(HOST_ROOM_ID, PEER_CONFIG);
 
-                peer.on('open', (id) => {
-                    document.getElementById('host-peer-id').innerText = id;
+                peer.on('open', () => {
                     document.getElementById('sys-status').innerText = 'HOSTING';
-                    document.getElementById('footer-info').innerText = '송출 진행 중 - ID: ' + id;
-
-                    // 10초 주기 캔버스 캡처 송출 준비
-                    startThumbnailCapturing();
+                    document.getElementById('footer-info').innerText = '송출 중 [MAIN_PC]';
                 });
 
-                // 시청자 연결 수신 처리
                 peer.on('call', (call) => {
                     call.answer(localStream);
                 });
 
-                peer.on('connection', (conn) => {
-                    conn.on('data', (data) => {
-                        if (data === 'REQ_THUMBNAIL') {
-                            sendThumbnail(conn);
-                        }
-                    });
+                peer.on('error', (err) => {
+                    if (err.type === 'unavailable-id') {
+                        alert('이미 다른 PC에서 화면 공유를 송출 중입니다.');
+                        location.reload();
+                    }
                 });
 
-                // 화면 공유 중단 이벤트 핸들러
                 localStream.getVideoTracks()[0].onended = () => {
                     alert('화면 공유가 종료되었습니다.');
                     location.reload();
                 };
 
             } catch (err) {
-                console.error(err);
                 alert('화면 공유 권한이 거부되었거나 지원되지 않는 브라우저입니다.');
             }
         }
 
-        // 10초 간격 썸네일 생성
-        function startThumbnailCapturing() {
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            const video = document.getElementById('host-preview');
-
-            canvas.width = 320;
-            canvas.height = 180;
-
-            captureInterval = setInterval(() => {
-                if (video.videoWidth > 0 && video.videoHeight > 0) {
-                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                    window.currentFrameBase64 = canvas.toDataURL('image/jpeg', 0.5);
-                }
-            }, 10000);
-        }
-
-        function sendThumbnail(conn) {
-            if (window.currentFrameBase64) {
-                conn.send({ type: 'THUMBNAIL_DATA', img: window.currentFrameBase64 });
-            }
-        }
-
-        // ==========================================
-        // 2. 시청하기 (관제실 그리드)
-        // ==========================================
+        // --- 2. 시청하기 (모바일/PC) ---
         function startViewing() {
             showView('view-viewer-list');
             document.getElementById('sys-status').innerText = 'VIEWER_MODE';
 
-            if (!peer) {
-                const viewerId = "VIEWER_" + Math.random().toString(36).substring(2, 9);
-                peer = new Peer(viewerId, PEER_CONFIG);
-                peer.on('open', () => {
-                    scanActivePcs();
-                });
-            } else {
-                scanActivePcs();
-            }
+            const viewerId = "VIEWER_" + Math.random().toString(36).substring(2, 9);
+            peer = new Peer(viewerId, PEER_CONFIG);
 
-            // 10초 주기로 PC 목록 갱신
-            setInterval(scanActivePcs, 10000);
-        }
-
-        function scanActivePcs() {
-            const grid = document.getElementById('pc-grid');
-            grid.innerHTML = '';
-            
-            // PeerJS 공용 시그널링 한계 보완을 위한 시뮬레이션 및 데이터 채널 스캔
-            // 실제 접속 중인 호스트 검색 연결
-            let found = 0;
-            
-            // 등록된 활성 호스트 탐색
-            activePeersMap.forEach((data, hostId) => {
-                found++;
-                renderPcCard(hostId, data.img || null);
+            peer.on('open', () => {
+                checkPcOnline();
             });
-
-            if (found === 0) {
-                // 더미 테스트 호스트 등록 (실제 호스트 연결 시 교체)
-                document.getElementById('no-pc-msg').classList.remove('hidden');
-            } else {
-                document.getElementById('no-pc-msg').classList.add('hidden');
-            }
         }
 
-        function renderPcCard(hostId, imgSrc) {
+        // 호스트 온라인 상태 확인 후 목록 카드 생성
+        function checkPcOnline() {
+            if (!peer) return;
+
+            // 데이터 연결로 호스트 생존 여부 테스트
+            const conn = peer.connect(HOST_ROOM_ID);
+            let isOnline = false;
+
+            const timer = setTimeout(() => {
+                if (!isOnline) {
+                    conn.close();
+                    document.getElementById('pc-grid').innerHTML = '';
+                    document.getElementById('no-pc-msg').classList.remove('hidden');
+                }
+            }, 3000);
+
+            conn.on('open', () => {
+                isOnline = true;
+                clearTimeout(timer);
+                conn.close();
+                renderPcCard();
+            });
+        }
+
+        function renderPcCard() {
             document.getElementById('no-pc-msg').classList.add('hidden');
             const grid = document.getElementById('pc-grid');
-            
-            let card = document.getElementById('card-' + hostId);
-            if (!card) {
-                card = document.createElement('div');
-                card.id = 'card-' + hostId;
-                card.className = "pc-card bg-gray-900 border-2 border-gray-700 p-2 cursor-pointer flex flex-col justify-between";
-                card.onclick = () => connectToPc(hostId);
-                grid.appendChild(card);
-            }
-
-            const displayName = hostId.replace(PREFIX, 'PC_');
-            card.innerHTML = `
-                <div class="bg-black border border-gray-800 aspect-video flex items-center justify-center overflow-hidden mb-2">
-                    ${imgSrc ? `<img src="${imgSrc}" class="w-full h-full object-cover"/>` : `<span class="text-xs text-gray-600 font-bold">| PC |</span>`}
-                </div>
-                <div class="flex items-center justify-between text-xs border-t border-gray-800 pt-2">
-                    <span class="font-bold text-gray-300">${displayName}</span>
-                    <span class="text-green-400 font-bold">LIVE</span>
+            grid.innerHTML = `
+                <div onclick="connectToPc()" class="bg-gray-900 border-2 border-gray-700 p-2 cursor-pointer hover:border-blue-500">
+                    <div class="bg-black border border-gray-800 aspect-video flex items-center justify-center mb-2">
+                        <span class="text-xs text-blue-400 font-bold">| PC 1 |</span>
+                    </div>
+                    <div class="flex items-center justify-between text-xs border-t border-gray-800 pt-2">
+                        <span class="font-bold text-gray-300">PC_1 (메인)</span>
+                        <span class="text-green-400 font-bold">LIVE</span>
+                    </div>
                 </div>
             `;
         }
 
-        function fetchActivePeers() {
-            scanActivePcs();
-        }
-
-        // ==========================================
-        // 3. 특정 PC 라이브 접속 시청
-        // ==========================================
-        function connectToPc(hostId) {
+        // --- 3. 라이브 시청 연결 ---
+        function connectToPc() {
             showView('view-stream');
-            document.getElementById('selected-pc-title').innerText = hostId.replace(PREFIX, 'PC_') + ' 실시간 방송';
+            const call = peer.call(HOST_ROOM_ID, null);
 
-            const call = peer.call(hostId, null);
-            
             call.on('stream', (remoteStream) => {
                 const remoteVideo = document.getElementById('remote-video');
                 remoteVideo.srcObject = remoteStream;
-                
                 remoteVideo.play().catch(() => {
                     document.getElementById('video-overlay').classList.remove('hidden');
                 });
             });
 
-            call.on('error', (err) => {
-                console.error(err);
-                alert('PC에 연결할 수 없습니다. 호스트가 접속을 종료했을 수 있습니다.');
+            call.on('error', () => {
+                alert('PC 화면을 불러올 수 없습니다.');
                 backToGrid();
             });
         }
 
         function playRemoteVideo() {
-            const remoteVideo = document.getElementById('remote-video');
-            remoteVideo.play();
+            document.getElementById('remote-video').play();
             document.getElementById('video-overlay').classList.add('hidden');
         }
 
@@ -366,7 +278,7 @@
             showView('view-viewer-list');
             const remoteVideo = document.getElementById('remote-video');
             if (remoteVideo.srcObject) {
-                remoteVideo.srcObject.getTracks().forEach(track => track.stop());
+                remoteVideo.srcObject.getTracks().forEach(t => t.stop());
                 remoteVideo.srcObject = null;
             }
         }
