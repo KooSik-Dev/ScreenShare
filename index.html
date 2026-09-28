@@ -64,7 +64,6 @@
         .btn-gray { background-color: #374151; border-color: #4b5563; }
         .btn-gray:hover { background-color: #4b5563; }
         .hidden { display: none !important; }
-        video { width: 100%; height: 100%; object-fit: contain; background: black; }
         .video-container {
             width: 100%;
             aspect-ratio: 16/9;
@@ -72,6 +71,12 @@
             border: 2px solid #374151;
             margin-top: 12px;
             position: relative;
+        }
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            background: black;
         }
         input {
             width: 100%;
@@ -121,8 +126,8 @@
         <!-- 3. 호스트 송출 화면 -->
         <section id="view-host" class="box hidden" style="max-width: 800px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                <span style="color: #ef4444; font-weight: bold;">● 실시간 화면 송출 중</span>
-                <span style="font-size: 14px;">방 번호: <b id="host-room-id" style="color: #60a5fa;">1001</b></span>
+                <span style="color: #ef4444; font-weight: bold;">● 실시간 라이브 송출 중</span>
+                <span style="font-size: 14px;">방 번호: <b style="color: #60a5fa;">1001</b></span>
             </div>
             <div class="video-container">
                 <video id="host-preview" autoplay playsinline muted></video>
@@ -132,13 +137,13 @@
         <!-- 4. 시청자 라이브 수신 화면 -->
         <section id="view-stream" class="box hidden" style="max-width: 800px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                <span style="color: #60a5fa; font-weight: bold;">PC 화면 시청 중</span>
+                <span style="color: #60a5fa; font-weight: bold;">PC 화면 실시간 시청 중</span>
                 <button onclick="location.reload()" style="padding: 6px 12px; background: #374151; color: white; border: 1px solid #4b5563; cursor: pointer;">나가기</button>
             </div>
             <div class="video-container">
-                <video id="remote-video" autoplay playsinline></video>
-                <div id="video-overlay" class="hidden" style="position: absolute; inset: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center;">
-                    <button onclick="playRemoteVideo()" class="btn btn-blue" style="width: auto; padding: 12px 24px;">터치하여 영상 재생</button>
+                <video id="remote-video" autoplay playsinline controls></video>
+                <div id="video-overlay" class="hidden" style="position: absolute; inset: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 10;">
+                    <button onclick="playRemoteVideo()" class="btn btn-blue" style="width: auto; padding: 14px 28px;">터치하여 영상 시작하기</button>
                 </div>
             </div>
         </section>
@@ -151,12 +156,14 @@
 
     <script>
         const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-        
+
+        // 구글 무료 STUN 서버 등록
         const PEER_CONFIG = {
             config: {
                 iceServers: [
                     { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:stun1.l.google.com:19302' }
+                    { urls: 'stun:stun1.l.google.com:19302' },
+                    { urls: 'stun:stun2.l.google.com:19302' }
                 ]
             }
         };
@@ -192,29 +199,25 @@
 
             try {
                 localStream = await navigator.mediaDevices.getDisplayMedia({
-                    video: { frameRate: { max: 30 } },
+                    video: { frameRate: { ideal: 30, max: 60 } },
                     audio: true
                 });
 
                 showView('view-host');
-                document.getElementById('host-preview').srcObject = localStream;
+                const hostVideo = document.getElementById('host-preview');
+                hostVideo.srcObject = localStream;
 
                 const hostRoomId = "GUSIK_ROOM_1001";
                 peer = new Peer(hostRoomId, PEER_CONFIG);
 
                 peer.on('open', () => {
                     document.getElementById('sys-status').innerText = 'HOSTING';
-                    document.getElementById('footer-info').innerText = '송출 중 [방 번호: 1001]';
+                    document.getElementById('footer-info').innerText = '실시간 송출 중 [방 번호: 1001]';
                 });
 
-                // 시청자가 데이터 채널로 접속했을 때
-                peer.on('connection', (conn) => {
-                    conn.on('data', (data) => {
-                        // 시청자가 영상 송출 요청을 보내면 호스트가 시청자 ID로 직접 영상 전달
-                        if (data && data.type === 'REQUEST_STREAM' && data.viewerId) {
-                            peer.call(data.viewerId, localStream);
-                        }
-                    });
+                // 시청자가 호출해 올 때 호스트 화면 스트림 전달
+                peer.on('call', (call) => {
+                    call.answer(localStream);
                 });
 
                 peer.on('error', (err) => {
@@ -242,45 +245,75 @@
             showView('view-stream');
             document.getElementById('sys-status').innerText = 'CONNECTING...';
 
-            // 시청자 고유 ID 생성
             const viewerId = "VIEWER_" + Math.random().toString(36).substring(2, 9);
             peer = new Peer(viewerId, PEER_CONFIG);
 
             peer.on('open', () => {
-                // [핵심 변경] peer.call()을 절대 쓰지 않고, 데이터 채널만 연다 (TypeError 예방)
-                const conn = peer.connect(targetRoomId);
+                // PeerJS TypeError 차단을 위해 시청자 전용 무음 더미 미디어 생성 후 전달
+                const dummyStream = createDummyStream();
+                const call = peer.call(targetRoomId, dummyStream);
 
-                conn.on('open', () => {
-                    // 호스트에게 내 Viewer ID 전달하며 방송 요청
-                    conn.send({ type: 'REQUEST_STREAM', viewerId: viewerId });
-                });
+                if (!call) {
+                    alert('호스트 PC 연결에 실패했습니다.');
+                    location.reload();
+                    return;
+                }
 
-                // 호스트가 보내오는 영상을 수신
-                peer.on('call', (call) => {
-                    call.answer(); // 빈 응답으로 영상 받기
-                    call.on('stream', (remoteStream) => {
-                        document.getElementById('sys-status').innerText = 'CONNECTED';
-                        const video = document.getElementById('remote-video');
-                        video.srcObject = remoteStream;
+                call.on('stream', (remoteStream) => {
+                    document.getElementById('sys-status').innerText = 'LIVE';
+                    const video = document.getElementById('remote-video');
+                    video.srcObject = remoteStream;
 
-                        video.play().catch(() => {
+                    const playPromise = video.play();
+                    if (playPromise !== undefined) {
+                        playPromise.catch(() => {
+                            // 모바일 자동재생 제한 시 버튼 표시
                             document.getElementById('video-overlay').classList.remove('hidden');
                         });
-                    });
+                    }
+                });
+
+                call.on('error', (err) => {
+                    console.error('Call Error:', err);
+                    alert('방송 전송 수신 중 오류가 발생했습니다.');
+                    location.reload();
                 });
             });
 
             peer.on('error', (err) => {
-                console.error(err);
+                console.error('Peer Error:', err);
                 if (err.type === 'peer-unavailable') {
-                    alert('해당 방 번호(' + code + ')의 PC를 찾을 수 없습니다. PC에서 [방만들기]를 먼저 눌렀는지 확인해 주세요.');
+                    alert('해당 방 번호(' + code + ')의 PC를 찾을 수 없습니다. PC에서 [방만들기]를 먼저 눌렀는지 확인하세요.');
                     location.reload();
                 }
             });
         }
 
+        // 시청자용 에러 방지용 가상 스트림 생성기
+        function createDummyStream() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 16;
+            canvas.height = 16;
+            const ctx = canvas.getContext('2d');
+            ctx.fillRect(0, 0, 16, 16);
+            const stream = canvas.captureStream(1);
+
+            // 무음 오디오 트랙 추가
+            const ctxAudio = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = ctxAudio.createOscillator();
+            const dst = ctxAudio.createMediaStreamDestination();
+            osc.connect(dst);
+            osc.start();
+            const audioTrack = dst.stream.getAudioTracks()[0];
+            audioTrack.enabled = false; // 소리 차단
+            stream.addTrack(audioTrack);
+
+            return stream;
+        }
+
         function playRemoteVideo() {
-            document.getElementById('remote-video').play();
+            const video = document.getElementById('remote-video');
+            video.play();
             document.getElementById('video-overlay').classList.add('hidden');
         }
     </script>
