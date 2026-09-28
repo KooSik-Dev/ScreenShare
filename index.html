@@ -152,7 +152,6 @@
     <script>
         const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         
-        // PeerJS STUN/TURN 서버 지정
         const PEER_CONFIG = {
             config: {
                 iceServers: [
@@ -208,19 +207,14 @@
                     document.getElementById('footer-info').innerText = '송출 중 [방 번호: 1001]';
                 });
 
-                // 시청자가 들어왔을 때 데이터 채널 처리
+                // 시청자가 데이터 채널로 접속했을 때
                 peer.on('connection', (conn) => {
                     conn.on('data', (data) => {
-                        // 시청자가 방송 전송을 요청했을 때 역으로 호스트가 비디오 수신 요청을 연결
-                        if (data && data.type === 'REQUEST_STREAM') {
-                            const call = peer.call(data.viewerId, localStream);
+                        // 시청자가 영상 송출 요청을 보내면 호스트가 시청자 ID로 직접 영상 전달
+                        if (data && data.type === 'REQUEST_STREAM' && data.viewerId) {
+                            peer.call(data.viewerId, localStream);
                         }
                     });
-                });
-
-                // 직접 호스트로 call이 올 경우 응답
-                peer.on('call', (call) => {
-                    call.answer(localStream);
                 });
 
                 peer.on('error', (err) => {
@@ -248,47 +242,32 @@
             showView('view-stream');
             document.getElementById('sys-status').innerText = 'CONNECTING...';
 
+            // 시청자 고유 ID 생성
             const viewerId = "VIEWER_" + Math.random().toString(36).substring(2, 9);
             peer = new Peer(viewerId, PEER_CONFIG);
 
             peer.on('open', () => {
-                // 1) 호스트와 먼저 데이터 연결 시도
+                // [핵심 변경] peer.call()을 절대 쓰지 않고, 데이터 채널만 연다 (TypeError 예방)
                 const conn = peer.connect(targetRoomId);
 
                 conn.on('open', () => {
-                    // 호스트에게 시청 중임을 알리고 스트림을 보내달라고 요청
+                    // 호스트에게 내 Viewer ID 전달하며 방송 요청
                     conn.send({ type: 'REQUEST_STREAM', viewerId: viewerId });
                 });
 
-                // 2) 호스트로부터 비디오 스트림이 수신될 때 처리
+                // 호스트가 보내오는 영상을 수신
                 peer.on('call', (call) => {
-                    call.answer(); // 빈 응답 전송하여 받기
+                    call.answer(); // 빈 응답으로 영상 받기
                     call.on('stream', (remoteStream) => {
-                        handleRemoteStream(remoteStream);
+                        document.getElementById('sys-status').innerText = 'CONNECTED';
+                        const video = document.getElementById('remote-video');
+                        video.srcObject = remoteStream;
+
+                        video.play().catch(() => {
+                            document.getElementById('video-overlay').classList.remove('hidden');
+                        });
                     });
                 });
-
-                // 3) 혹시 호스트가 기존 방식으로 direct call을 받았을 때 예외 안전 처리
-                try {
-                    // 빈 트랙 캔버스로 안전한 더미 미디어 생성 후 호출
-                    const dummyCanvas = document.createElement('canvas');
-                    dummyCanvas.width = 1; dummyCanvas.height = 1;
-                    const dummyStream = dummyCanvas.captureStream();
-
-                    const call = peer.call(targetRoomId, dummyStream);
-
-                    // undefined 방지 검사 (Uncaught TypeError 차단)
-                    if (call && typeof call.on === 'function') {
-                        call.on('stream', (remoteStream) => {
-                            handleRemoteStream(remoteStream);
-                        });
-                        call.on('error', (e) => {
-                            console.log('Call fallback info:', e);
-                        });
-                    }
-                } catch (e) {
-                    console.log('Call retry mode...');
-                }
             });
 
             peer.on('error', (err) => {
@@ -297,16 +276,6 @@
                     alert('해당 방 번호(' + code + ')의 PC를 찾을 수 없습니다. PC에서 [방만들기]를 먼저 눌렀는지 확인해 주세요.');
                     location.reload();
                 }
-            });
-        }
-
-        function handleRemoteStream(remoteStream) {
-            document.getElementById('sys-status').innerText = 'CONNECTED';
-            const video = document.getElementById('remote-video');
-            video.srcObject = remoteStream;
-
-            video.play().catch(() => {
-                document.getElementById('video-overlay').classList.remove('hidden');
             });
         }
 
