@@ -107,7 +107,7 @@
             <h2 style="font-size: 20px; border-bottom: 2px solid #374151; padding-bottom: 12px; margin-bottom: 12px;">구식의 화면 공유 시스템</h2>
             <p style="font-size: 12px; color: #9ca3af; margin-bottom: 24px;">AI활용하여 만든 화면공유 시스템</p>
 
-            <button id="btn-create" onclick="startHosting()" class="btn btn-blue">방만들기 (PC 전용)</button>
+            <button id="btn-create" onclick="startHosting()" class="btn btn-blue">방만들기</button>
             <button onclick="showViewerInput()" class="btn btn-gray">시청하기</button>
 
             <div id="mobile-notice" class="hidden" style="margin-top: 16px; padding: 12px; background: #451a03; border: 1px solid #d97706; color: #fde68a; font-size: 12px; text-align: left;">
@@ -157,19 +157,21 @@
     <script>
         const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
-        // 구글 무료 STUN 서버 등록
+        // STUN / TURN 중계 서버 추가 (5G 및 타 네트워크 완벽 대응)
         const PEER_CONFIG = {
             config: {
                 iceServers: [
                     { urls: 'stun:stun.l.google.com:19302' },
                     { urls: 'stun:stun1.l.google.com:19302' },
-                    { urls: 'stun:stun2.l.google.com:19302' }
+                    { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+                    { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' }
                 ]
             }
         };
 
         let peer = null;
         let localStream = null;
+        let activeCall = null;
 
         window.addEventListener('DOMContentLoaded', () => {
             if (isMobile) {
@@ -181,6 +183,12 @@
                 document.getElementById('mobile-notice').classList.remove('hidden');
             }
         });
+
+        function updateStatus(text, color = '#4ade80') {
+            const statusEl = document.getElementById('sys-status');
+            statusEl.innerText = text;
+            statusEl.style.color = color;
+        }
 
         function showView(id) {
             ['view-main', 'view-viewer-input', 'view-host', 'view-stream'].forEach(v => {
@@ -204,20 +212,23 @@
                 });
 
                 showView('view-host');
-                const hostVideo = document.getElementById('host-preview');
-                hostVideo.srcObject = localStream;
+                document.getElementById('host-preview').srcObject = localStream;
 
                 const hostRoomId = "GUSIK_ROOM_1001";
                 peer = new Peer(hostRoomId, PEER_CONFIG);
 
                 peer.on('open', () => {
-                    document.getElementById('sys-status').innerText = 'HOSTING';
+                    updateStatus('HOSTING', '#4ade80');
                     document.getElementById('footer-info').innerText = '실시간 송출 중 [방 번호: 1001]';
                 });
 
-                // 시청자가 호출해 올 때 호스트 화면 스트림 전달
                 peer.on('call', (call) => {
                     call.answer(localStream);
+                });
+
+                peer.on('disconnected', () => {
+                    updateStatus('RECONNECTING...', '#facc15');
+                    peer.reconnect();
                 });
 
                 peer.on('error', (err) => {
@@ -227,6 +238,7 @@
                     }
                 });
 
+                // 호스트가 직접 화면 공유를 껐을 때
                 localStream.getVideoTracks()[0].onended = () => {
                     alert('화면 공유가 종료되었습니다.');
                     location.reload();
@@ -243,45 +255,50 @@
             const targetRoomId = "GUSIK_ROOM_" + code;
 
             showView('view-stream');
-            document.getElementById('sys-status').innerText = 'CONNECTING...';
+            updateStatus('CONNECTING...', '#facc15');
 
             const viewerId = "VIEWER_" + Math.random().toString(36).substring(2, 9);
             peer = new Peer(viewerId, PEER_CONFIG);
 
             peer.on('open', () => {
-                // PeerJS TypeError 차단을 위해 시청자 전용 무음 더미 미디어 생성 후 전달
                 const dummyStream = createDummyStream();
-                const call = peer.call(targetRoomId, dummyStream);
+                activeCall = peer.call(targetRoomId, dummyStream);
 
-                if (!call) {
+                if (!activeCall) {
                     alert('호스트 PC 연결에 실패했습니다.');
                     location.reload();
                     return;
                 }
 
-                call.on('stream', (remoteStream) => {
-                    document.getElementById('sys-status').innerText = 'LIVE';
+                // 신호 수신 성공
+                activeCall.on('stream', (remoteStream) => {
+                    updateStatus('LIVE', '#4ade80');
                     const video = document.getElementById('remote-video');
                     video.srcObject = remoteStream;
 
                     const playPromise = video.play();
                     if (playPromise !== undefined) {
                         playPromise.catch(() => {
-                            // 모바일 자동재생 제한 시 버튼 표시
                             document.getElementById('video-overlay').classList.remove('hidden');
                         });
                     }
                 });
 
-                call.on('error', (err) => {
-                    console.error('Call Error:', err);
-                    alert('방송 전송 수신 중 오류가 발생했습니다.');
-                    location.reload();
+                // 호스트 신호가 끊어지거나 접속 종료 시 감지
+                activeCall.on('close', () => {
+                    handleDisconnect('방송 신호가 끊어졌습니다.');
+                });
+
+                activeCall.on('error', () => {
+                    handleDisconnect('연결에 오류가 발생하여 중단되었습니다.');
                 });
             });
 
+            peer.on('disconnected', () => {
+                updateStatus('DISCONNECTED', '#ef4444');
+            });
+
             peer.on('error', (err) => {
-                console.error('Peer Error:', err);
                 if (err.type === 'peer-unavailable') {
                     alert('해당 방 번호(' + code + ')의 PC를 찾을 수 없습니다. PC에서 [방만들기]를 먼저 눌렀는지 확인하세요.');
                     location.reload();
@@ -289,7 +306,14 @@
             });
         }
 
-        // 시청자용 에러 방지용 가상 스트림 생성기
+        // 신호 끊김 처리 공통 함수
+        function handleDisconnect(msg) {
+            updateStatus('DISCONNECTED', '#ef4444');
+            alert(msg);
+            location.reload();
+        }
+
+        // 연결 유지를 위한 가상 스트림
         function createDummyStream() {
             const canvas = document.createElement('canvas');
             canvas.width = 16;
@@ -298,14 +322,13 @@
             ctx.fillRect(0, 0, 16, 16);
             const stream = canvas.captureStream(1);
 
-            // 무음 오디오 트랙 추가
             const ctxAudio = new (window.AudioContext || window.webkitAudioContext)();
             const osc = ctxAudio.createOscillator();
             const dst = ctxAudio.createMediaStreamDestination();
             osc.connect(dst);
             osc.start();
             const audioTrack = dst.stream.getAudioTracks()[0];
-            audioTrack.enabled = false; // 소리 차단
+            audioTrack.enabled = false;
             stream.addTrack(audioTrack);
 
             return stream;
