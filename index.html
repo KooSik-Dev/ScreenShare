@@ -79,6 +79,14 @@
             margin-bottom: 12px;
             text-align: center;
         }
+        .room-number-display {
+            font-size: 24px;
+            font-weight: 300;
+            color: #60a5fa;
+            text-align: center;
+            margin-bottom: 12px;
+            letter-spacing: 2px;
+        }
     </style>
 </head>
 <body>
@@ -107,22 +115,15 @@
 
         <!-- 3. 호스트 송출 화면 -->
         <section id="view-host" class="box hidden" style="max-width: 800px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                <span style="color: #ef4444; font-weight: bold;">● 실시간 송출 중</span>
-                <span style="font-size: 16px;">방 번호: <b id="host-room-number" style="color: #60a5fa; font-size: 20px;">----</b></span>
-            </div>
-            <div class="video-container">
+            <div id="host-room-number" class="room-number-display">----</div>
+            <div class="video-container" style="margin-top: 0;">
                 <video id="host-preview" autoplay playsinline muted></video>
             </div>
         </section>
 
         <!-- 4. 시청자 라이브 수신 화면 -->
         <section id="view-stream" class="box hidden" style="max-width: 800px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                <span style="color: #60a5fa; font-weight: bold;">실시간 시청 중</span>
-                <button onclick="location.reload()" style="padding: 6px 12px; background: #374151; color: white; border: 1px solid #4b5563; cursor: pointer;">나가기</button>
-            </div>
-            <div class="video-container">
+            <div class="video-container" style="margin-top: 0;">
                 <video id="remote-video" autoplay playsinline controls></video>
                 <div id="video-overlay" class="hidden" style="position: absolute; inset: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 10;">
                     <button onclick="playRemoteVideo()" class="btn btn-blue" style="width: auto; padding: 14px 28px;">터치하여 영상 시작하기</button>
@@ -171,7 +172,6 @@
             showView('view-viewer-input');
         }
 
-        // 4자리 랜덤 숫자 생성 함수 (1000 ~ 9999)
         function generateRandomRoomId() {
             return Math.floor(1000 + Math.random() * 9000).toString();
         }
@@ -181,7 +181,6 @@
             if (isMobile) return;
 
             try {
-                // 화면 공유 스트림이 기존에 없는 경우에만 팝업 실행
                 if (!localStream) {
                     localStream = await navigator.mediaDevices.getDisplayMedia({
                         video: { frameRate: { ideal: 30, max: 60 } },
@@ -196,7 +195,6 @@
             }
         }
 
-        // 방 생성 및 중복 시 자동으로 다른 번호로 재시도
         function createHostPeer() {
             const randomCode = generateRandomRoomId();
             const hostRoomId = "GUSIK_ROOM_" + randomCode;
@@ -226,11 +224,10 @@
                 peer.reconnect();
             });
 
-            // 방 번호가 중복될 경우 다른 번호로 자동 재시도
             peer.on('error', (err) => {
                 if (err.type === 'unavailable-id') {
                     console.log(`방 번호 ${randomCode}가 사용 중입니다. 새로운 번호로 재시도합니다...`);
-                    createHostPeer(); // 재귀 호출로 새 번호 발급 시도
+                    createHostPeer();
                 }
             });
         }
@@ -272,7 +269,6 @@
                     }
                 });
 
-                // 실시간 연결 끊김 감지
                 activeCall.on('close', () => {
                     handleDisconnect('방송 신호가 끊어졌습니다.');
                 });
