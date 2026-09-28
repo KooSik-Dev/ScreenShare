@@ -100,7 +100,7 @@
         <!-- 2. 시청자 방 번호 입력 -->
         <section id="view-viewer-input" class="box hidden">
             <h3 style="margin-bottom: 16px;">접속할 방 번호 입력</h3>
-            <input type="text" id="room-code-input" value="1001" placeholder="방 번호 입력 (기본: 1001)">
+            <input type="text" id="room-code-input" placeholder="4자리 방 번호 입력 (예: 4829)" maxlength="4">
             <button onclick="startViewing()" class="btn btn-blue">접속하기</button>
             <button onclick="showView('view-main')" class="btn btn-gray">뒤로가기</button>
         </section>
@@ -109,7 +109,7 @@
         <section id="view-host" class="box hidden" style="max-width: 800px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                 <span style="color: #ef4444; font-weight: bold;">● 실시간 송출 중</span>
-                <span style="font-size: 14px;">방 번호: <b style="color: #60a5fa;">1001</b></span>
+                <span style="font-size: 16px;">방 번호: <b id="host-room-number" style="color: #60a5fa; font-size: 20px;">----</b></span>
             </div>
             <div class="video-container">
                 <video id="host-preview" autoplay playsinline muted></video>
@@ -171,50 +171,78 @@
             showView('view-viewer-input');
         }
 
+        // 4자리 랜덤 숫자 생성 함수 (1000 ~ 9999)
+        function generateRandomRoomId() {
+            return Math.floor(1000 + Math.random() * 9000).toString();
+        }
+
         // 1. 호스트 PC (방만들기)
         async function startHosting() {
             if (isMobile) return;
 
             try {
-                localStream = await navigator.mediaDevices.getDisplayMedia({
-                    video: { frameRate: { ideal: 30, max: 60 } },
-                    audio: true
-                });
+                // 화면 공유 스트림이 기존에 없는 경우에만 팝업 실행
+                if (!localStream) {
+                    localStream = await navigator.mediaDevices.getDisplayMedia({
+                        video: { frameRate: { ideal: 30, max: 60 } },
+                        audio: true
+                    });
+                }
 
-                showView('view-host');
-                document.getElementById('host-preview').srcObject = localStream;
-
-                const hostRoomId = "GUSIK_ROOM_1001";
-                peer = new Peer(hostRoomId, PEER_CONFIG);
-
-                peer.on('call', (call) => {
-                    call.answer(localStream);
-                });
-
-                peer.on('disconnected', () => {
-                    peer.reconnect();
-                });
-
-                peer.on('error', (err) => {
-                    if (err.type === 'unavailable-id') {
-                        alert('이미 다른 PC에서 1001번 방을 이용 중입니다.');
-                        location.reload();
-                    }
-                });
-
-                localStream.getVideoTracks()[0].onended = () => {
-                    alert('화면 공유가 종료되었습니다.');
-                    location.reload();
-                };
+                createHostPeer();
 
             } catch (err) {
                 alert('화면 공유 권한이 거부되었거나 지원되지 않는 브라우저입니다.');
             }
         }
 
+        // 방 생성 및 중복 시 자동으로 다른 번호로 재시도
+        function createHostPeer() {
+            const randomCode = generateRandomRoomId();
+            const hostRoomId = "GUSIK_ROOM_" + randomCode;
+
+            if (peer) {
+                peer.destroy();
+            }
+
+            peer = new Peer(hostRoomId, PEER_CONFIG);
+
+            peer.on('open', () => {
+                showView('view-host');
+                document.getElementById('host-preview').srcObject = localStream;
+                document.getElementById('host-room-number').innerText = randomCode;
+
+                localStream.getVideoTracks()[0].onended = () => {
+                    alert('화면 공유가 종료되었습니다.');
+                    location.reload();
+                };
+            });
+
+            peer.on('call', (call) => {
+                call.answer(localStream);
+            });
+
+            peer.on('disconnected', () => {
+                peer.reconnect();
+            });
+
+            // 방 번호가 중복될 경우 다른 번호로 자동 재시도
+            peer.on('error', (err) => {
+                if (err.type === 'unavailable-id') {
+                    console.log(`방 번호 ${randomCode}가 사용 중입니다. 새로운 번호로 재시도합니다...`);
+                    createHostPeer(); // 재귀 호출로 새 번호 발급 시도
+                }
+            });
+        }
+
         // 2. 시청자
         function startViewing() {
-            const code = document.getElementById('room-code-input').value.trim() || "1001";
+            const code = document.getElementById('room-code-input').value.trim();
+            if (!code) {
+                alert('방 번호를 입력해주세요.');
+                return;
+            }
+
             const targetRoomId = "GUSIK_ROOM_" + code;
 
             showView('view-stream');
@@ -256,7 +284,7 @@
 
             peer.on('error', (err) => {
                 if (err.type === 'peer-unavailable') {
-                    alert('해당 방 번호(' + code + ')의 PC를 찾을 수 없습니다. PC에서 [방만들기]를 먼저 눌렀는지 확인하세요.');
+                    alert('해당 방 번호(' + code + ')의 방송을 찾을 수 없습니다. 번호를 다시 확인해주세요.');
                     location.reload();
                 }
             });
