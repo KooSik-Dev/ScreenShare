@@ -1,321 +1,606 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>구식의 화면 공유 시스템</title>
-    <!-- PeerJS CDN -->
-    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-    <style>
-        *, *::before, *::after {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            border-radius: 0 !important;
-        }
-        body {
-            background-color: #111827;
-            color: #F3F4F6;
-            font-family: monospace, sans-serif;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 16px;
-            user-select: none;
-        }
-        main {
-            width: 100%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-        .box {
-            width: 100%;
-            max-width: 600px;
-            background-color: #1f2937;
-            border: 2px solid #374151;
-            padding: 24px;
-            text-align: center;
-        }
-        .btn {
-            width: 100%;
-            padding: 16px;
-            font-size: 18px;
-            font-weight: bold;
-            cursor: pointer;
-            border: 2px solid;
-            color: white;
-            margin-top: 10px;
-        }
-        .btn-blue { background-color: #1d4ed8; border-color: #3b82f6; }
-        .btn-blue:hover { background-color: #2563eb; }
-        .btn-gray { background-color: #374151; border-color: #4b5563; }
-        .btn-gray:hover { background-color: #4b5563; }
-        .hidden { display: none !important; }
-        .video-container {
-            width: 100%;
-            aspect-ratio: 16/9;
-            background: black;
-            border: 2px solid #374151;
-            margin-top: 12px;
-            position: relative;
-        }
-        video {
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
-            background: black;
-        }
-        input {
-            width: 100%;
-            padding: 12px;
-            background: #111827;
-            border: 2px solid #374151;
-            color: white;
-            font-family: monospace;
-            font-size: 16px;
-            margin-bottom: 12px;
-            text-align: center;
-        }
-        .room-number-display {
-            font-size: 24px;
-            font-weight: 300;
-            color: #60a5fa;
-            text-align: center;
-            margin-bottom: 12px;
-            letter-spacing: 2px;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>구식의 화면 공유 시스템</title>
+  <!-- MQTT는 연결 신호만 전달하고, 영상은 WebRTC로 직접 전송합니다. -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/4.3.7/mqtt.min.js"></script>
+  <style>
+:root {
+      color-scheme: dark;
+      --bg: #111111;
+      --panel: #1a1a1a;
+      --panel-soft: #202020;
+      --line: #363636;
+      --text: #eeeeee;
+      --muted: #999999;
+      --green: #8ae234;
+      --green-dark: #273b1a;
+      --red: #ef6f6c;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    html, body { min-height: 100%; }
+    body {
+      margin: 0;
+      padding: 28px 18px 40px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Ubuntu", "Noto Sans KR", system-ui, sans-serif;
+      font-size: 15px;
+      line-height: 1.5;
+    }
+
+    .shell { width: 100%; max-width: 760px; margin: 0 auto; }
+    .topbar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0;
+      margin-bottom: 28px;
+    }
+    .prompt { color: var(--green); font-family: monospace; font-size: 1rem; }
+    h1 { width: 100%; margin: 0; font-size: 1.25rem; font-weight: 700; letter-spacing: .01em; text-align: center; }
+    .version { margin-left: auto; color: var(--muted); font: 12px monospace; }
+
+    .card {
+      width: 100%;
+      padding: 22px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 4px;
+    }
+    .role-select {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1px;
+      margin-bottom: 24px;
+      background: var(--line);
+      border: 1px solid var(--line);
+    }
+    button {
+      min-height: 42px;
+      padding: 10px 14px;
+      border: 0;
+      border-radius: 0;
+      background: var(--panel-soft);
+      color: var(--muted);
+      font: inherit;
+      cursor: pointer;
+      transition: background .15s, color .15s;
+    }
+    button:hover:not(:disabled) { color: var(--text); background: #292929; }
+    button.active { background: var(--green-dark); color: var(--green); }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+
+    .section-label {
+      margin: 0 0 8px;
+      color: var(--green);
+      font: 12px monospace;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    .help { margin: 0 0 14px; color: var(--muted); font-size: .9rem; }
+    #hostSection, #viewerSection {
+      height: 128px;
+    }
+    #viewerSection {
+      padding-top: 14px;
+    }
+    .pin-display {
+      height: 54px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 14px 0 18px;
+      padding: 0;
+      background: #101010;
+      border: 1px solid var(--line);
+      color: var(--green);
+      font: 700 2.15rem/1.2 monospace;
+      letter-spacing: .22em;
+      text-align: center;
+    }
+    input[type="text"] {
+      width: 100%;
+      height: 54px;
+      margin: 0 0 18px;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 2px;
+      outline: none;
+      background: #101010;
+      color: var(--text);
+      font: 1.1rem monospace;
+      letter-spacing: .18em;
+      text-align: center;
+    }
+    input[type="text"]:focus { border-color: var(--green); }
+    input::placeholder { color: #666; letter-spacing: normal; }
+    .btn-action { width: 100%; background: var(--green); color: #111; font-weight: 700; }
+    .btn-action:hover:not(:disabled) { background: #a4ed59; color: #111; }
+
+    .output { margin-top: 22px; }
+    .output-label { color: var(--muted); font: 12px monospace; margin-bottom: 8px; }
+    video {
+      width: 100%;
+      max-width: 900px;
+      margin: 0;
+      display: none;
+      background: #000;
+      border: 1px solid var(--line);
+      border-radius: 2px;
+    }
+    .chat-box {
+      display: none;
+      width: 100%;
+      margin-top: 14px;
+      padding: 14px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 4px;
+    }
+    .chat-box.open { display: block; }
+    .chat-messages {
+      max-height: 220px;
+      margin-bottom: 10px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      scrollbar-width: thin;
+      scrollbar-color: var(--line) transparent;
+    }
+    .chat-message {
+      margin: 0;
+      padding: 3px 0;
+      color: var(--text);
+      font: 1rem/1.45 system-ui, sans-serif;
+    }
+    .chat-message.mine { color: #f6d365; }
+    .chat-input {
+      width: 100%;
+      height: 54px;
+      margin: 0;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 2px;
+      outline: none;
+      background: #101010;
+      color: var(--text);
+      font: 1rem system-ui, sans-serif;
+    }
+    .chat-input:focus { border-color: var(--green); }
+    .chat-input::placeholder { color: #666; letter-spacing: normal; }
+
+    @media (max-width: 520px) {
+      body { padding: 20px 12px 28px; }
+      .card { padding: 16px; }
+      .version { display: none; }
+      .role-select { grid-template-columns: 1fr; }
+    }
+
+
+.brand-lockup {
+  position: fixed;
+  right: 28px;
+  bottom: 26px;
+  z-index: 10;
+  padding: 0;
+  color: var(--text);
+  text-align: center;
+  background: transparent;
+  border: 0;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, .8);
+}
+.brand-line {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 50px;
+}
+.brand-gemini {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 112px;
+  height: 50px;
+  color: var(--text);
+  font-size: 1.42rem;
+  font-weight: 800;
+  letter-spacing: .08em;
+}
+.brand-x {
+  color: var(--muted);
+  font-size: 1.7rem;
+  font-weight: 700;
+}
+.brand-name {
+  color: var(--text);
+  width: 112px;
+  font-size: 1.42rem;
+  font-weight: 800;
+  letter-spacing: .08em;
+}
+.brand-caption {
+  margin-top: 2px;
+  color: #c8c8c8;
+  font-size: .82rem;
+  white-space: nowrap;
+}
+@media (max-width: 640px) {
+  .brand-lockup { right: 10px; bottom: 10px; padding: 0; }
+  .brand-line { gap: 4px; min-height: 40px; }
+  .brand-gemini { width: 84px; height: 40px; font-size: 1.05rem; }
+  .brand-name { width: 84px; font-size: 1.05rem; }
+  .brand-x { font-size: 1.3rem; }
+  .brand-caption { margin-top: 1px; font-size: .7rem; }
+}
+  </style>
 </head>
 <body>
+  <main class="shell">
+    <header class="topbar">
+      <h1>구식의 화면 공유 시스템</h1>
+    </header>
 
-    <main>
-        <!-- 1. 메인 선택 화면 -->
-        <section id="view-main" class="box">
-            <h2 style="font-size: 20px; font-weight: bold; margin-bottom: 4px;">구식의 화면 공유 시스템</h2>
-            <p style="font-size: 12px; color: #9ca3af; margin-bottom: 24px;">AI활용하여 만든 화면공유 시스템</p>
+    <div class="card">
+      <div class="role-select">
+      <button id="btnRoleHost" class="active" onclick="switchRole('host')">호스트</button>
+      <button id="btnRoleViewer" onclick="switchRole('viewer')">접속</button>
+      </div>
 
-            <button id="btn-create" onclick="startHosting()" class="btn btn-blue">방만들기</button>
-            <button onclick="showViewerInput()" class="btn btn-gray">시청하기</button>
+      <!-- 호스트 영역 -->
+      <div id="hostSection">
+      <div id="pinBox" class="pin-display">----</div>
+      <button id="btnStartShare" class="btn-action" onclick="startHost()">화면 공유</button>
+      </div>
 
-            <div id="mobile-notice" class="hidden" style="margin-top: 16px; padding: 12px; background: #451a03; border: 1px solid #d97706; color: #fde68a; font-size: 12px; text-align: left;">
-                * 모바일 기기에서는 [시청하기] 전용 모드로 동작합니다.
-            </div>
-        </section>
+      <!-- 시청자 영역 -->
+      <div id="viewerSection" style="display: none;">
+        <input type="text" id="pinInput" placeholder="PIN 번호 4자리 입력" maxlength="4">
+      <button id="btnConnect" class="btn-action" onclick="startViewer()">호스트 연결</button>
+      </div>
+    </div>
 
-        <!-- 2. 시청자 방 번호 입력 -->
-        <section id="view-viewer-input" class="box hidden">
-            <h3 style="margin-bottom: 16px;">접속할 방 번호 입력</h3>
-            <input type="text" id="room-code-input" placeholder="4자리 방 번호 입력" maxlength="4">
-            <button onclick="startViewing()" class="btn btn-blue">접속하기</button>
-            <button onclick="showView('view-main')" class="btn btn-gray">뒤로가기</button>
-        </section>
+    <section id="chatBox" class="chat-box" aria-label="채팅">
+      <div id="chatMessages" class="chat-messages" aria-live="polite"></div>
+      <input id="chatInput" class="chat-input" type="text" autocomplete="off" placeholder="메시지 입력 후 Enter">
+    </section>
 
-        <!-- 3. 호스트 송출 화면 -->
-        <section id="view-host" class="box hidden" style="max-width: 800px;">
-            <div id="host-room-number" class="room-number-display">----</div>
-            <div class="video-container" style="margin-top: 0;">
-                <video id="host-preview" autoplay playsinline muted></video>
-            </div>
-        </section>
+    <aside class="brand-lockup" aria-label="Gemini X KOOSIK">
+      <div class="brand-line">
+        <span class="brand-gemini">Gemini</span>
+        <span class="brand-x">X</span>
+        <span class="brand-name">KOOSIK</span>
+      </div>
+      <div class="brand-caption">AI 활용 하여 개발한</div>
+    </aside>
 
-        <!-- 4. 시청자 라이브 수신 화면 -->
-        <section id="view-stream" class="box hidden" style="max-width: 800px;">
-            <div class="video-container" style="margin-top: 0;">
-                <video id="remote-video" autoplay playsinline controls></video>
-                <div id="video-overlay" class="hidden" style="position: absolute; inset: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 10;">
-                    <button onclick="playRemoteVideo()" class="btn btn-blue" style="width: auto; padding: 14px 28px;">터치하여 영상 시작하기</button>
-                </div>
-            </div>
-        </section>
-    </main>
+    <section class="output">
+      <video id="remoteVideo" autoplay playsinline muted controls></video>
+    </section>
 
-    <script>
-        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  </main>
 
-        const PEER_CONFIG = {
-            config: {
-                iceServers: [
-                    { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:stun1.l.google.com:19302' },
-                    { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
-                    { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' }
-                ]
+  <script>
+let role = 'host';
+    let mqttClient = null;
+    let peerConnection = null;
+    let localStream = null;
+    let currentPin = '';
+    let pendingIceCandidates = [];
+    let remoteDescriptionReady = false;
+    let chatTopic = '';
+    const chatMessageIds = new Set();
+
+    async function addIceCandidateSafely(candidate) {
+      if (!peerConnection) return;
+      if (!remoteDescriptionReady) {
+        pendingIceCandidates.push(candidate);
+        return;
+      }
+      try { await peerConnection.addIceCandidate(new RTCIceCandidate(candidate)); }
+      catch (e) { log('ICE 후보 처리 지연: ' + e.message); }
+    }
+
+    async function flushIceCandidates() {
+      const queued = pendingIceCandidates.splice(0);
+      for (const candidate of queued) {
+        try { await peerConnection.addIceCandidate(new RTCIceCandidate(candidate)); }
+        catch (e) { log('ICE 후보 추가 실패: ' + e.message); }
+      }
+    }
+
+    function tuneVideoSender() {
+      if (!peerConnection) return;
+      peerConnection.getSenders().forEach(sender => {
+        if (!sender.track || sender.track.kind !== 'video') return;
+        sender.track.contentHint = 'detail';
+        const params = sender.getParameters();
+        params.degradationPreference = 'maintain-framerate';
+        if (!params.encodings || !params.encodings.length) params.encodings = [{}];
+        params.encodings[0].maxBitrate = 2500000;
+        params.encodings[0].maxFramerate = 30;
+        sender.setParameters(params).then(() => log('끊김 완화: 최대 30fps / 최대 2.5Mbps / 프레임 우선'))
+          .catch(e => log('송신 최적화 미적용: ' + e.message));
+      });
+    }
+
+    // 방화벽 우회용 STUN + TURN 서버 설정
+    const rtcConfig = {
+      iceCandidatePoolSize: 10,
+      bundlePolicy: 'max-bundle',
+      rtcpMuxPolicy: 'require',
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:global.stun.twilio.com:3478' },
+        // 무료 TURN 중계 서버 (UDP/TCP 방화벽 차단 우회)
+        {
+          urls: 'turn:openrelay.metered.ca:80',
+          username: 'openrelayproject',
+          credential: 'openrelayproject'
+        },
+        {
+          urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+          username: 'openrelayproject',
+          credential: 'openrelayproject'
+        },
+        {
+          urls: 'turns:openrelay.metered.ca:443?transport=tcp',
+          username: 'openrelayproject',
+          credential: 'openrelayproject'
+        }
+      ]
+    };
+
+    function toggleChat() {
+      const chatBox = document.getElementById('chatBox');
+      const chatInput = document.getElementById('chatInput');
+      const isOpen = chatBox.classList.toggle('open');
+      if (isOpen) chatInput.focus();
+      else chatInput.blur();
+    }
+
+    function appendChatMessage(text, mine) {
+      const messages = document.getElementById('chatMessages');
+      const message = document.createElement('p');
+      message.className = 'chat-message' + (mine ? ' mine' : '');
+      message.textContent = text;
+      messages.appendChild(message);
+      messages.scrollTop = messages.scrollHeight;
+    }
+
+    function sendChatMessage() {
+      const input = document.getElementById('chatInput');
+      const text = input.value.trim();
+      if (!text || !mqttClient || !chatTopic) return;
+      const id = `${role}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+      chatMessageIds.add(id);
+      sendSignal(chatTopic, { sender: role, type: 'chat', id, text });
+      appendChatMessage(text, true);
+      input.value = '';
+    }
+
+    function receiveChatMessage(data) {
+      if (!data.text || (data.id && chatMessageIds.has(data.id))) return;
+      if (data.id) chatMessageIds.add(data.id);
+      appendChatMessage(data.text, false);
+    }
+
+    document.addEventListener('copy', (event) => event.preventDefault());
+    document.addEventListener('cut', (event) => event.preventDefault());
+    document.addEventListener('contextmenu', (event) => event.preventDefault());
+    document.addEventListener('keydown', (event) => {
+      const active = document.activeElement;
+      const typing = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA');
+      if (!typing && event.key.toLowerCase() === 'c') {
+        event.preventDefault();
+        toggleChat();
+      }
+    });
+    document.getElementById('chatInput').addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        sendChatMessage();
+      }
+    });
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) log('탭이 백그라운드 상태입니다. 일부 브라우저는 백그라운드에서 성능을 낮출 수 있습니다.');
+      else log('탭이 활성화되었습니다.');
+    });
+
+    function log(msg) {
+      console.log(msg);
+    }
+
+    function switchRole(r) {
+      role = r;
+      document.getElementById('btnRoleHost').classList.toggle('active', r === 'host');
+      document.getElementById('btnRoleViewer').classList.toggle('active', r === 'viewer');
+      document.getElementById('hostSection').style.display = r === 'host' ? 'block' : 'none';
+      document.getElementById('viewerSection').style.display = r === 'viewer' ? 'block' : 'none';
+    }
+
+    // MQTT 브로커 연결 (포트 8083 WebSocket으로 학교 방화벽 회피)
+    function initMQTT(pin, onConnectCallback) {
+      log("신호 서버(MQTT WebSocket)에 연결 중...");
+      mqttClient = mqtt.connect('wss://broker.emqx.io:8084/mqtt', {
+        clientId: 'rtc_' + Math.random().toString(16).substr(2, 8)
+      });
+
+      mqttClient.on('connect', () => {
+        log("신호 서버 연결 성공!");
+        const topic = `screenshare/room/${pin}`;
+        mqttClient.subscribe(topic, (err) => {
+          if (!err) {
+            log(`PIN [${pin}] 채널 입장 완료.`);
+            onConnectCallback(topic);
+          }
+        });
+      });
+
+      mqttClient.on('error', (err) => log("신호 서버 에러: " + err.message));
+    }
+
+    function sendSignal(topic, data) {
+      if (mqttClient) {
+        mqttClient.publish(topic, JSON.stringify(data));
+      }
+    }
+
+    // --- [호스트 로직] ---
+    async function startHost() {
+      try {
+        localStream = await navigator.mediaDevices.getDisplayMedia({
+          video: {
+            width: { ideal: 1280, max: 1280 },
+            height: { ideal: 720, max: 720 },
+            frameRate: { ideal: 30, max: 30 }
+          },
+          audio: false
+        });
+        const track = localStream.getVideoTracks()[0];
+        if (track) {
+          track.contentHint = 'detail';
+          try { await track.applyConstraints({ width: { max: 1280 }, height: { max: 720 }, frameRate: { max: 30 } }); } catch (_) {}
+        }
+        const preview = document.getElementById('remoteVideo');
+        preview.srcObject = localStream;
+        preview.style.display = 'block';
+        preview.play().catch(() => {});
+        log("화면 캡처 성공: 1280x720 / 최대 30fps");
+      } catch (e) {
+        alert("화면 공유 권한이 거부되었습니다.");
+        return;
+      }
+
+      currentPin = Math.floor(1000 + Math.random() * 9000).toString();
+      document.getElementById('pinBox').innerText = currentPin;
+      document.getElementById('btnStartShare').disabled = true;
+
+      initMQTT(currentPin, (topic) => {
+        chatTopic = topic;
+        log("시청자 접속 대기 중...");
+
+        mqttClient.on('message', async (t, message) => {
+          const data = JSON.parse(message.toString());
+          if (data.sender === 'viewer') {
+            if (data.type === 'chat') {
+              receiveChatMessage(data);
+            } else if (data.type === 'join') {
+              log("시청자가 접속했습니다! P2P 연결 시도...");
+              createHostPeerConnection(topic);
+            } else if (data.type === 'answer' && peerConnection) {
+              log("시청자 응답(Answer) 수신 완료.");
+              await peerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp));
+              remoteDescriptionReady = true;
+              await flushIceCandidates();
+            } else if (data.type === 'candidate' && peerConnection) {
+              await addIceCandidateSafely(data.candidate);
             }
+          }
+        });
+      });
+    }
+
+    function createHostPeerConnection(topic) {
+      peerConnection = new RTCPeerConnection(rtcConfig);
+
+      localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+      setTimeout(tuneVideoSender, 100);
+
+      peerConnection.onicecandidate = (event) => {
+        if (event.candidate) {
+          sendSignal(topic, { sender: 'host', type: 'candidate', candidate: event.candidate });
+        }
+      };
+
+      peerConnection.onconnectionstatechange = () => {
+        log(`P2P 연결 상태: ${peerConnection.connectionState}`);
+      };
+      peerConnection.oniceconnectionstatechange = () => {
+        log(`ICE 상태: ${peerConnection.iceConnectionState}`);
+      };
+
+      peerConnection.createOffer().then(offer => {
+        return peerConnection.setLocalDescription(offer);
+      }).then(() => {
+        log("시청자에게 연결 제안(Offer) 전송...");
+        sendSignal(topic, { sender: 'host', type: 'offer', sdp: peerConnection.localDescription });
+      });
+    }
+
+    // --- [시청자 로직] ---
+    function startViewer() {
+      const pin = document.getElementById('pinInput').value.trim();
+      if (pin.length !== 4) {
+        alert("4자리 PIN 번호를 입력해주세요.");
+        return;
+      }
+
+      document.getElementById('btnConnect').disabled = true;
+      initMQTT(pin, (topic) => {
+        chatTopic = topic;
+        log("호스트 탐색 중...");
+        
+        peerConnection = new RTCPeerConnection(rtcConfig);
+        pendingIceCandidates = [];
+        remoteDescriptionReady = false;
+
+        peerConnection.onicecandidate = (event) => {
+          if (event.candidate) {
+            sendSignal(topic, { sender: 'viewer', type: 'candidate', candidate: event.candidate });
+          }
         };
 
-        let peer = null;
-        let localStream = null;
-        let activeCall = null;
+        // 비디오 스트림 수신 이벤트
+        peerConnection.ontrack = (event) => {
+          log("비디오 스트림 수신 성공! 화면을 띄웁니다.");
+          const video = document.getElementById('remoteVideo');
+          video.style.display = 'block';
+          video.srcObject = event.streams[0];
+          const receiver = peerConnection.getReceivers().find(r => r.track && r.track.kind === 'video');
+          if (receiver && 'playoutDelayHint' in receiver) receiver.playoutDelayHint = 0.15;
+          video.onloadedmetadata = () => video.play().catch(() => log('영상 재생 버튼을 눌러주세요.'));
+          video.onwaiting = () => log('네트워크 버퍼링 중...');
+          video.onstalled = () => log('수신 정지 감지, 재생 복구 중...');
+          video.onplaying = () => log('영상 재생 중');
+        };
 
-        window.addEventListener('DOMContentLoaded', () => {
-            if (isMobile) {
-                const btn = document.getElementById('btn-create');
-                btn.disabled = true;
-                btn.style.opacity = '0.4';
-                btn.style.cursor = 'not-allowed';
-                btn.onclick = () => alert('화면 공유 송출은 데스크톱(PC) 환경에서만 가능합니다.');
-                document.getElementById('mobile-notice').classList.remove('hidden');
+        peerConnection.onconnectionstatechange = () => {
+          log(`P2P 연결 상태: ${peerConnection.connectionState}`);
+        };
+
+        mqttClient.on('message', async (t, message) => {
+          const data = JSON.parse(message.toString());
+          if (data.sender === 'host') {
+            if (data.type === 'chat') {
+              receiveChatMessage(data);
+            } else if (data.type === 'offer') {
+              log("호스트의 제안(Offer) 수신. 응답 작성 중...");
+              await peerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp));
+              remoteDescriptionReady = true;
+              await flushIceCandidates();
+              const answer = await peerConnection.createAnswer();
+              await peerConnection.setLocalDescription(answer);
+              sendSignal(topic, { sender: 'viewer', type: 'answer', sdp: peerConnection.localDescription });
+            } else if (data.type === 'candidate') {
+              await addIceCandidateSafely(data.candidate);
             }
+          }
         });
 
-        function showView(id) {
-            ['view-main', 'view-viewer-input', 'view-host', 'view-stream'].forEach(v => {
-                document.getElementById(v).classList.add('hidden');
-            });
-            document.getElementById(id).classList.remove('hidden');
-        }
-
-        function showViewerInput() {
-            showView('view-viewer-input');
-        }
-
-        function generateRandomRoomId() {
-            return Math.floor(1000 + Math.random() * 9000).toString();
-        }
-
-        // 1. 호스트 PC (방만들기)
-        async function startHosting() {
-            if (isMobile) return;
-
-            try {
-                if (!localStream) {
-                    localStream = await navigator.mediaDevices.getDisplayMedia({
-                        video: { frameRate: { ideal: 30, max: 60 } },
-                        audio: true
-                    });
-                }
-
-                createHostPeer();
-
-            } catch (err) {
-                alert('화면 공유 권한이 거부되었거나 지원되지 않는 브라우저입니다.');
-            }
-        }
-
-        function createHostPeer() {
-            const randomCode = generateRandomRoomId();
-            const hostRoomId = "GUSIK_ROOM_" + randomCode;
-
-            if (peer) {
-                peer.destroy();
-            }
-
-            peer = new Peer(hostRoomId, PEER_CONFIG);
-
-            peer.on('open', () => {
-                showView('view-host');
-                document.getElementById('host-preview').srcObject = localStream;
-                document.getElementById('host-room-number').innerText = randomCode;
-
-                localStream.getVideoTracks()[0].onended = () => {
-                    alert('화면 공유가 종료되었습니다.');
-                    location.reload();
-                };
-            });
-
-            peer.on('call', (call) => {
-                call.answer(localStream);
-            });
-
-            peer.on('disconnected', () => {
-                peer.reconnect();
-            });
-
-            peer.on('error', (err) => {
-                if (err.type === 'unavailable-id') {
-                    console.log(`방 번호 ${randomCode}가 사용 중입니다. 새로운 번호로 재시도합니다...`);
-                    createHostPeer();
-                }
-            });
-        }
-
-        // 2. 시청자
-        function startViewing() {
-            const code = document.getElementById('room-code-input').value.trim();
-            if (!code) {
-                alert('방 번호를 입력해주세요.');
-                return;
-            }
-
-            const targetRoomId = "GUSIK_ROOM_" + code;
-
-            showView('view-stream');
-
-            const viewerId = "VIEWER_" + Math.random().toString(36).substring(2, 9);
-            peer = new Peer(viewerId, PEER_CONFIG);
-
-            peer.on('open', () => {
-                const dummyStream = createDummyStream();
-                activeCall = peer.call(targetRoomId, dummyStream);
-
-                if (!activeCall) {
-                    alert('호스트 PC 연결에 실패했습니다.');
-                    location.reload();
-                    return;
-                }
-
-                activeCall.on('stream', (remoteStream) => {
-                    const video = document.getElementById('remote-video');
-                    video.srcObject = remoteStream;
-
-                    const playPromise = video.play();
-                    if (playPromise !== undefined) {
-                        playPromise.catch(() => {
-                            document.getElementById('video-overlay').classList.remove('hidden');
-                        });
-                    }
-                });
-
-                activeCall.on('close', () => {
-                    handleDisconnect('방송 신호가 끊어졌습니다.');
-                });
-
-                activeCall.on('error', () => {
-                    handleDisconnect('연결에 오류가 발생하여 중단되었습니다.');
-                });
-            });
-
-            peer.on('error', (err) => {
-                if (err.type === 'peer-unavailable') {
-                    alert('해당 방 번호(' + code + ')의 방송을 찾을 수 없습니다. 번호를 다시 확인해주세요.');
-                    location.reload();
-                }
-            });
-        }
-
-        function handleDisconnect(msg) {
-            alert(msg);
-            location.reload();
-        }
-
-        function createDummyStream() {
-            const canvas = document.createElement('canvas');
-            canvas.width = 16;
-            canvas.height = 16;
-            const ctx = canvas.getContext('2d');
-            ctx.fillRect(0, 0, 16, 16);
-            const stream = canvas.captureStream(1);
-
-            const ctxAudio = new (window.AudioContext || window.webkitAudioContext)();
-            const osc = ctxAudio.createOscillator();
-            const dst = ctxAudio.createMediaStreamDestination();
-            osc.connect(dst);
-            osc.start();
-            const audioTrack = dst.stream.getAudioTracks()[0];
-            audioTrack.enabled = false;
-            stream.addTrack(audioTrack);
-
-            return stream;
-        }
-
-        function playRemoteVideo() {
-            const video = document.getElementById('remote-video');
-            video.play();
-            document.getElementById('video-overlay').classList.add('hidden');
-        }
-    </script>
+        // 호스트에게 내가 들어왔음을 알림
+        sendSignal(topic, { sender: 'viewer', type: 'join' });
+      });
+    }
+  </script>
 </body>
 </html>
